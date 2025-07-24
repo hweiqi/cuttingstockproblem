@@ -3,6 +3,7 @@ import { Material, PlacementResult } from '../models/Material';
 import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
 import { DynamicChainBuilder } from '../optimization/DynamicChainBuilder';
 import { GuaranteedPlacer } from '../placement/GuaranteedPlacer';
+import { OptimizedPlacer } from '../../../placement/OptimizedPlacer';
 
 /**
  * V6系統結果
@@ -29,6 +30,7 @@ export interface V6SystemConfig {
   angleTolerance?: number;           // 角度容差（度）
   maxChainSize?: number;            // 最大鏈大小
   prioritizeMixedChains?: boolean;  // 優先混合鏈
+  useOptimizedPlacer?: boolean;     // 使用優化排版器
   constraints?: {
     cuttingLoss?: number;
     frontEndLoss?: number;
@@ -47,7 +49,7 @@ export interface V6SystemConfig {
 export class V6System {
   private matcher: FlexibleAngleMatcher;
   private chainBuilder: DynamicChainBuilder;
-  private placer: GuaranteedPlacer;
+  private placer: GuaranteedPlacer | OptimizedPlacer;
   private config: V6SystemConfig;
 
   constructor(config?: V6SystemConfig) {
@@ -60,7 +62,13 @@ export class V6System {
 
     this.matcher = new FlexibleAngleMatcher(this.config.angleTolerance);
     this.chainBuilder = new DynamicChainBuilder(this.config.angleTolerance);
-    this.placer = new GuaranteedPlacer(this.config.constraints);
+    
+    // 根據配置選擇排版器
+    if (this.config.useOptimizedPlacer) {
+      this.placer = new OptimizedPlacer(this.config.constraints);
+    } else {
+      this.placer = new GuaranteedPlacer(this.config.constraints);
+    }
   }
 
   /**

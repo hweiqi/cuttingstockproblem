@@ -25,6 +25,7 @@ export class V6CuttingService {
     this.v6System = new V6System({
       angleTolerance: 5,
       prioritizeMixedChains: true,
+      useOptimizedPlacer: true,  // 啟用優化排版器
       constraints: this.currentConstraints
     });
   }
@@ -43,6 +44,7 @@ export class V6CuttingService {
     this.v6System = new V6System({
       angleTolerance: 5,
       prioritizeMixedChains: true,
+      useOptimizedPlacer: true,  // 啟用優化排版器
       constraints: this.currentConstraints
     });
   }
