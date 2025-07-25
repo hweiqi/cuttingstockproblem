@@ -73,7 +73,7 @@ export class OptimalMaterialSelector {
       endLosses.front + endLosses.back;
 
     // 找最佳材料
-    let bestMaterial = STANDARD_MATERIAL_LENGTHS[0];
+    let bestMaterial: StandardMaterialLength = STANDARD_MATERIAL_LENGTHS[0];
     let bestScore = -Infinity;
 
     for (const materialLength of STANDARD_MATERIAL_LENGTHS) {

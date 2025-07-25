@@ -177,13 +177,13 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                     </div>
                     {partIndex < (plan.cuts || plan.parts).length - 1 && (
                       <div className="cutting-loss">
-                        {part.isSharedCut && part.angleSavings ? (
+                        {part.isSharedCut ? (
                           <>
                             <div className="shared-cut-saving">
-                              共刀節省: {part.angleSavings} mm
+                              共刀節省: 0 mm
                             </div>
                             <div className="actual-loss">
-                              實際損耗: {cuttingLoss - part.angleSavings} mm
+                              實際損耗: {cuttingLoss} mm
                             </div>
                           </>
                         ) : (
