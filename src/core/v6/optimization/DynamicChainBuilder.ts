@@ -2,6 +2,7 @@ import { PartWithQuantity, Part, PartInstance, AnglePositionType } from '../mode
 import { SharedCutChain, ChainPart, ChainConnection, ChainBuildReport, determineChainStructure } from '../models/Chain';
 import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
 import { AngleMatch } from '../models/SharedCut';
+import { STANDARD_MATERIAL_LENGTHS } from '../../../config/MaterialConfig';
 
 interface ChainBuildResult {
   chains: SharedCutChain[];
@@ -16,6 +17,7 @@ export class DynamicChainBuilder {
   private matcher: FlexibleAngleMatcher;
   private chainIdCounter = 0;
   private readonly MAX_CHAIN_SIZE = 50; // 單個鏈的最大零件數
+  private readonly MAX_CHAIN_LENGTH = Math.max(...STANDARD_MATERIAL_LENGTHS) - 50; // 最大鏈長度，預留50mm餘量
 
   constructor(angleTolerance?: number) {
     this.matcher = new FlexibleAngleMatcher(angleTolerance);
@@ -282,6 +284,9 @@ export class DynamicChainBuilder {
     let current = start;
     let position = 1;
     
+    // 追蹤當前鏈中的實例，用於長度計算
+    const chainInstances: PartInstance[] = [start];
+    
     while (parts.length < this.MAX_CHAIN_SIZE && used.size < instances.length) {
       const candidates = instances.filter(inst => 
         !used.has(this.getInstanceKey(inst))
@@ -302,6 +307,19 @@ export class DynamicChainBuilder {
       }
       
       if (!bestMatch || !bestInstance || bestMatch.score < 5) break; // 分數太低則停止
+      
+      // 檢查添加此零件後是否會超過最大鏈長度
+      const tempInstances = [...chainInstances];
+      const tempInstance = instances.find(inst => 
+        inst.part.id === bestInstance!.part.id && inst.instanceId === bestInstance!.instanceId
+      );
+      if (tempInstance) {
+        tempInstances.push(tempInstance);
+        const estimatedLength = this.calculateEstimatedChainLength(tempInstances, connections.length + 1);
+        if (estimatedLength > this.MAX_CHAIN_LENGTH) {
+          break; // 超過長度限制則停止
+        }
+      }
       
       // 添加到鏈中
       parts.push({
@@ -326,6 +344,7 @@ export class DynamicChainBuilder {
       });
       
       used.add(this.getInstanceKey(bestInstance));
+      chainInstances.push(bestInstance); // 添加到實例追蹤
       current = bestInstance;
       position++;
     }
@@ -376,9 +395,17 @@ export class DynamicChainBuilder {
    * 計算角度節省量
    */
   private calculateAngleSavings(angle: number, thickness: number): number {
+    // 確保有有效的厚度值
+    const actualThickness = thickness || 20; // 默認厚度 20mm
+    
     const radians = (angle * Math.PI) / 180;
-    const savings = thickness / Math.sin(radians);
-    return Math.min(savings, thickness * 3);
+    const savings = actualThickness / Math.sin(radians);
+    
+    // 合理的節省範圍：最小5mm，最大為厚度的2倍
+    const minSavings = 5;
+    const maxSavings = actualThickness * 2;
+    
+    return Math.max(minSavings, Math.min(savings, maxSavings));
   }
 
   /**
@@ -440,6 +467,22 @@ export class DynamicChainBuilder {
         batch: 0
       }
     };
+  }
+
+  /**
+   * 計算鏈的預估長度
+   */
+  private calculateEstimatedChainLength(instances: PartInstance[], connectionsCount: number): number {
+    let totalLength = 20 + 10; // 假設前端損耗20mm + 後端損耗10mm
+    
+    for (const instance of instances) {
+      totalLength += instance.part.length;
+    }
+    
+    // 減去共刀節省 (假設每個連接節省 10.35mm)
+    totalLength -= connectionsCount * 10.35;
+    
+    return totalLength;
   }
 
   /**

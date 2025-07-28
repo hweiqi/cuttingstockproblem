@@ -32,7 +32,7 @@ v6/
 │   ├── ChainBuilder.ts  # 共刀鏈構建器
 │   └── DynamicOptimizer.ts # 動態優化器
 ├── placement/
-│   └── GuaranteedPlacer.ts # 保證排版器
+│   └── ../../../placement/OptimizedPlacer.ts # 優化排版器（支援無限材料）
 └── system/
     └── V6System.ts      # 完整系統
 ```

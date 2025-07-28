@@ -178,14 +178,9 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                     {partIndex < (plan.cuts || plan.parts).length - 1 && (
                       <div className="cutting-loss">
                         {part.isSharedCut ? (
-                          <>
-                            <div className="shared-cut-saving">
-                              共刀節省: 0 mm
-                            </div>
-                            <div className="actual-loss">
-                              實際損耗: {cuttingLoss} mm
-                            </div>
-                          </>
+                          <div className="shared-cut-indicator">
+                            共刀連接
+                          </div>
                         ) : (
                           <>切割損耗: {cuttingLoss} mm</>
                         )}
@@ -375,15 +370,10 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
           border-radius: 3px;
         }
         
-        .shared-cut-saving {
-          color: #4caf50;
+        .shared-cut-indicator {
+          color: #2196f3;
           font-weight: bold;
-          margin-bottom: 2px;
-        }
-        
-        .actual-loss {
-          color: #666;
-          font-size: 11px;
+          font-style: italic;
         }
 
         .plan-summary {

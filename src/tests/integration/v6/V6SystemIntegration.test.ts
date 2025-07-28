@@ -170,13 +170,15 @@ describe('V6系統綜合測試', () => {
       console.log(`總零件數: ${parts.reduce((sum, p) => sum + p.quantity, 0)}`);
       console.log(`已排版零件: ${result.placedParts.length}`);
       console.log(`未排版零件: ${result.unplacedParts.length}`);
-      console.log(`虛擬材料: ${result.virtualMaterialsCreated}`);
+      console.log(`使用材料數: ${result.usedMaterials.length}`);
 
-      // 驗證所有零件都被排版
+      // 驗證即使初始材料不足，系統也能完成所有排版（無限供應）
       const totalParts = parts.reduce((sum, p) => sum + p.quantity, 0);
       expect(result.placedParts.length).toBe(totalParts);
       expect(result.unplacedParts.length).toBe(0);
       expect(result.success).toBe(true);
+      // 使用的材料數應該超過初始提供的數量
+      expect(result.usedMaterials.length).toBeGreaterThan(materials.length);
     });
   });
 

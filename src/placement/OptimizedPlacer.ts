@@ -28,7 +28,6 @@ export class OptimizedPlacer {
     minPartSpacing: 0
   };
   
-  private virtualMaterialIdCounter = 0;
   private constraints: PlacementConstraints;
 
   constructor(constraints?: Partial<PlacementConstraints>) {
@@ -80,7 +79,7 @@ export class OptimizedPlacer {
     );
     
     // 步驟3：使用優化算法排版剩餘零件
-    const packingResult = this.optimizedPacking(remainingInstances, materialInstances);
+    const packingResult = this.optimizedPacking(remainingInstances, materialInstances, materials);
     
     // 步驟4：轉換打包結果為放置結果
     this.convertPackingToPlacement(packingResult.bins, placedParts, usedInstances);
@@ -94,18 +93,21 @@ export class OptimizedPlacer {
       });
     }
     
-    // 步驟6：為未放置的零件創建虛擬材料
-    let virtualMaterialsCreated = 0;
+    // 步驟6：使用更積極的排版策略處理剩餘零件
     if (unplacedParts.length > 0) {
-      virtualMaterialsCreated = this.createVirtualMaterialsForUnplaced(
+      // 嘗試更積極的排版策略，確保所有零件都能排版
+      const improvedPlacement = this.attemptAggressivePlacement(
         unplacedParts,
         partInstances,
         materialInstances,
         placedParts,
-        usedInstances
+        usedInstances,
+        materials
       );
-      // 清空未放置列表，因為都已經放置到虛擬材料上
+      
+      // 更新未放置列表
       unplacedParts.length = 0;
+      unplacedParts.push(...improvedPlacement.stillUnplaced);
     }
     
     const endTime = performance.now();
@@ -116,7 +118,6 @@ export class OptimizedPlacer {
       unplacedParts,
       materialInstances,
       partInstances.length,
-      virtualMaterialsCreated,
       endTime - startTime,
       chains
     );
@@ -124,8 +125,13 @@ export class OptimizedPlacer {
 
   /**
    * 優化打包算法 - Best Fit Decreasing with Mixed Packing
+   * 支持無限材料供應
    */
-  private optimizedPacking(instances: PartInstance[], materialInstances: MaterialInstance[]): {
+  private optimizedPacking(
+    instances: PartInstance[], 
+    materialInstances: MaterialInstance[],
+    originalMaterials: Material[]
+  ): {
     bins: MaterialBin[];
     unplaced: PackingItem[];
   } {
@@ -141,26 +147,102 @@ export class OptimizedPlacer {
     
     // 初始化材料箱
     const bins: MaterialBin[] = materialInstances
-      .filter(m => !m.material.isVirtual)
       .map(mat => ({
         material: mat,
         items: [],
-        usedLength: 0,  // 這裡只記錄新增的使用長度
+        usedLength: 0,
         remainingLength: mat.material.length - mat.usedLength
       }));
     
     const unplaced: PackingItem[] = [];
     
-    // 執行打包
+    // 第一輪：正常打包
     for (const item of items) {
-      const bestBin = this.findBestBin(bins, item);
+      let bestBin = this.findBestBin(bins, item);
+      
+      // 如果找不到合適的bin，嘗試添加新的材料實例
+      if (!bestBin) {
+        const newBins = this.addNewMaterialInstances(bins, materialInstances, originalMaterials, item);
+        if (newBins.length > bins.length) {
+          bins.push(...newBins.slice(bins.length));
+          bestBin = this.findBestBin(bins, item);
+        }
+      }
       
       if (bestBin) {
-        // 添加到最佳箱子
         this.addItemToBin(bestBin, item);
       } else {
         unplaced.push(item);
       }
+    }
+    
+    // 第二輪：更積極的打包策略
+    if (unplaced.length > 0) {
+      const stillUnplaced: PackingItem[] = [];
+      
+      for (const item of unplaced) {
+        let placed = false;
+        
+        // 策略1：減少前後端損耗
+        const reducedLossLength = item.actualLength + this.constraints.cuttingLoss + 10; // 最小10mm餘量
+        for (const bin of bins) {
+          if (bin.items.length === 0 && bin.remainingLength >= reducedLossLength + this.constraints.frontEndLoss) {
+            // 第一個零件需要前端損耗
+            const modifiedItem = {
+              ...item,
+              requiredLength: reducedLossLength + this.constraints.frontEndLoss
+            };
+            this.addItemToBin(bin, modifiedItem);
+            placed = true;
+            break;
+          } else if (bin.items.length > 0 && bin.remainingLength >= reducedLossLength) {
+            // 非第一個零件
+            const modifiedItem = {
+              ...item,
+              requiredLength: reducedLossLength
+            };
+            this.addItemToBin(bin, modifiedItem);
+            placed = true;
+            break;
+          }
+        }
+        
+        // 策略2：極限打包（最小損耗）
+        if (!placed) {
+          const minLength = item.actualLength + this.constraints.cuttingLoss;
+          for (const bin of bins) {
+            if (bin.remainingLength >= minLength) {
+              const modifiedItem = {
+                ...item,
+                requiredLength: minLength
+              };
+              this.addItemToBin(bin, modifiedItem);
+              placed = true;
+              break;
+            }
+          }
+        }
+        
+        // 策略3：如果仍未放置，嘗試添加新材料
+        if (!placed) {
+          const newBins = this.addNewMaterialInstances(bins, materialInstances, originalMaterials, item);
+          if (newBins.length > bins.length) {
+            bins.push(...newBins.slice(bins.length));
+            // 嘗試將零件放到新添加的bin中
+            const newBin = bins[bins.length - 1];
+            if (newBin.remainingLength >= item.requiredLength) {
+              this.addItemToBin(newBin, item);
+              placed = true;
+            }
+          }
+        }
+        
+        if (!placed) {
+          stillUnplaced.push(item);
+        }
+      }
+      
+      return { bins, unplaced: stillUnplaced };
     }
     
     return { bins, unplaced };
@@ -168,21 +250,54 @@ export class OptimizedPlacer {
 
   /**
    * 找到最適合的材料箱
+   * 優先使用最長的材料，除非效率太低
    */
   private findBestBin(bins: MaterialBin[], item: PackingItem): MaterialBin | null {
+    // 獲取最長材料的長度
+    const maxMaterialLength = Math.max(...bins.map(b => b.material.material.length));
+    
+    // 首先嘗試在最長材料中放置
+    const longestBins = bins.filter(b => b.material.material.length === maxMaterialLength);
     let bestBin: MaterialBin | null = null;
     let bestScore = -Infinity;
     
-    for (const bin of bins) {
-      // 計算實際需要的長度
+    for (const bin of longestBins) {
       const requiredLength = bin.items.length === 0 
-        ? item.requiredLength  // 第一個零件需要包含前後端損耗
-        : item.actualLength + this.constraints.cuttingLoss; // 後續零件只需要切割損耗
+        ? item.requiredLength
+        : item.actualLength + this.constraints.cuttingLoss;
       
       if (bin.remainingLength >= requiredLength) {
-        // 計算適配分數
         const score = this.calculateBinScore(bin, item, requiredLength);
-        
+        if (score > bestScore) {
+          bestScore = score;
+          bestBin = bin;
+        }
+      }
+    }
+    
+    // 如果最長材料可以放置，檢查效率
+    if (bestBin) {
+      const efficiency = this.calculateBinEfficiency(bestBin, item);
+      // 策略調整：
+      // 1. 如果材料已有零件，優先使用（促進集中使用）
+      // 2. 如果是第一個零件且零件不是極小（效率 >= 5%），使用最長材料
+      // 3. 如果效率超過20%，使用最長材料
+      if (bestBin.items.length > 0 || (bestBin.items.length === 0 && efficiency >= 0.05) || efficiency >= 0.2) {
+        return bestBin;
+      }
+    }
+    
+    // 否則考慮其他長度的材料
+    bestScore = -Infinity;
+    bestBin = null;
+    
+    for (const bin of bins) {
+      const requiredLength = bin.items.length === 0 
+        ? item.requiredLength
+        : item.actualLength + this.constraints.cuttingLoss;
+      
+      if (bin.remainingLength >= requiredLength) {
+        const score = this.calculateBinScore(bin, item, requiredLength);
         if (score > bestScore) {
           bestScore = score;
           bestBin = bin;
@@ -197,14 +312,35 @@ export class OptimizedPlacer {
    * 計算材料箱的適配分數
    */
   private calculateBinScore(bin: MaterialBin, item: PackingItem, requiredLength: number): number {
-    // 基礎分數：利用率
-    const utilization = requiredLength / bin.remainingLength;
-    let score = utilization * 100;
+    const remainingAfter = bin.remainingLength - requiredLength;
+    let score = 0;
+    
+    // 策略1：完美匹配（剩餘空間極小）
+    if (remainingAfter >= 0 && remainingAfter < this.constraints.cuttingLoss) {
+      score = 10000;
+    }
+    // 策略2：剩餘空間小於最小零件長度（避免浪費）
+    else if (remainingAfter >= 0 && remainingAfter < 500) {
+      score = 5000 - remainingAfter;
+    }
+    // 策略3：優先填滿即將滿的材料
+    else if (bin.items.length > 0) {
+      const fillRate = (bin.material.material.length - bin.remainingLength) / bin.material.material.length;
+      score = fillRate * 1000;
+    }
+    // 策略4：新材料，選擇長度最接近的
+    else {
+      score = 100 - (remainingAfter / bin.material.material.length) * 100;
+    }
     
     // 獎勵：已經有零件的材料（促進集中使用）
     if (bin.items.length > 0) {
       score += 20;
     }
+    
+    // 計算利用率
+    const totalUsed = bin.material.material.length - bin.remainingLength + requiredLength;
+    const utilization = totalUsed / bin.material.material.length;
     
     // 獎勵：幾乎完美填充（>95%利用率）
     if (utilization > 0.95) {
@@ -220,21 +356,42 @@ export class OptimizedPlacer {
   }
 
   /**
+   * 計算材料箱的使用效率
+   */
+  private calculateBinEfficiency(bin: MaterialBin, item: PackingItem): number {
+    const requiredLength = bin.items.length === 0 
+      ? item.requiredLength
+      : item.actualLength + this.constraints.cuttingLoss;
+    
+    const totalUsed = bin.material.material.length - bin.remainingLength + requiredLength;
+    return totalUsed / bin.material.material.length;
+  }
+
+  /**
    * 將零件添加到材料箱
    */
   private addItemToBin(bin: MaterialBin, item: PackingItem): void {
     bin.items.push(item);
     
+    // 精確計算使用的長度
+    let actualUsed: number;
     if (bin.items.length === 1) {
-      // 第一個零件
-      bin.usedLength += item.requiredLength;
+      // 第一個零件：使用指定的requiredLength（可能已被優化）
+      actualUsed = Math.min(item.requiredLength, bin.remainingLength);
     } else {
-      // 後續零件
-      bin.usedLength += item.actualLength + this.constraints.cuttingLoss;
+      // 後續零件：只需要零件長度+切割損耗
+      actualUsed = item.actualLength + this.constraints.cuttingLoss;
+      // 如果是最後一個能放入的零件，確保包含後端損耗
+      if (bin.remainingLength - actualUsed < this.constraints.backEndLoss + 100) {
+        actualUsed = Math.min(
+          actualUsed + this.constraints.backEndLoss,
+          bin.remainingLength
+        );
+      }
     }
     
-    // 剩餘長度 = 材料總長度 - 材料原有使用長度 - 新增使用長度
-    bin.remainingLength = bin.material.material.length - bin.material.usedLength - bin.usedLength;
+    bin.usedLength += actualUsed;
+    bin.remainingLength = Math.max(0, bin.remainingLength - actualUsed);
   }
 
   /**
@@ -250,10 +407,19 @@ export class OptimizedPlacer {
       
       // 計算起始位置
       const startPosition = bin.material.usedLength;
-      let position = startPosition + this.constraints.frontEndLoss;
+      let position = startPosition;
       
       for (let i = 0; i < bin.items.length; i++) {
         const item = bin.items[i];
+        
+        // 第一個零件需要前端損耗
+        if (i === 0) {
+          position += this.constraints.frontEndLoss;
+        } else {
+          // 非第一個零件只需要切割損耗
+          position += this.constraints.cuttingLoss;
+        }
+        
         const placed: PlacedPart = {
           partId: item.instance.part.id,
           partInstanceId: item.instance.instanceId,
@@ -269,9 +435,6 @@ export class OptimizedPlacer {
         
         // 更新位置
         position += item.instance.part.length;
-        if (i < bin.items.length - 1) {
-          position += this.constraints.cuttingLoss;
-        }
       }
       
       // 更新材料使用長度
@@ -319,6 +482,74 @@ export class OptimizedPlacer {
           placedParts,
           usedInstances
         );
+      } else {
+        // 如果找不到合適的材料放置整個鏈，嘗試拆分鏈
+        this.placeSplitChain(
+          chain,
+          chainInstances,
+          materialInstances,
+          placedParts,
+          usedInstances
+        );
+      }
+    }
+  }
+
+  /**
+   * 拆分共刀鏈並嘗試放置
+   */
+  private placeSplitChain(
+    chain: SharedCutChain,
+    chainInstances: PartInstance[],
+    materialInstances: MaterialInstance[],
+    placedParts: PlacedPart[],
+    usedInstances: Set<string>
+  ): void {
+    // 先嘗試找到能容納最多零件的組合
+    for (let groupSize = chainInstances.length; groupSize >= 2; groupSize--) {
+      for (let startIdx = 0; startIdx <= chainInstances.length - groupSize; startIdx++) {
+        const group = chainInstances.slice(startIdx, startIdx + groupSize);
+        const connections = chain.connections.slice(startIdx, startIdx + groupSize - 1);
+        
+        if (group.some(inst => usedInstances.has(this.getInstanceKey(inst)))) {
+          continue;
+        }
+        
+        const subChain: SharedCutChain = {
+          ...chain,
+          parts: group.map((inst, idx) => ({
+            partId: inst.part.id,
+            instanceId: inst.instanceId,
+            position: idx
+          })),
+          connections: connections,
+          totalSavings: connections.reduce((sum, conn) => sum + conn.savings, 0)
+        };
+        
+        const requiredLength = this.calculateChainLength(group, subChain);
+        const suitableMaterial = this.findSuitableMaterialForChain(materialInstances, requiredLength);
+        
+        if (suitableMaterial) {
+          this.placeChainOnMaterial(
+            subChain,
+            group,
+            suitableMaterial,
+            placedParts,
+            usedInstances
+          );
+          
+          // 標記已使用
+          group.forEach(inst => {
+            startIdx = Math.max(0, startIdx - 1);
+          });
+        }
+      }
+    }
+    
+    // 處理剩餘的單個零件（放棄共刀）
+    for (const instance of chainInstances) {
+      if (!usedInstances.has(this.getInstanceKey(instance))) {
+        // 作為普通零件處理，稍後會被optimizedPacking處理
       }
     }
   }
@@ -393,126 +624,158 @@ export class OptimizedPlacer {
   }
 
   /**
-   * 為未放置的零件創建虛擬材料
+   * 使用更積極的排版策略確保所有零件都能排版
+   * 策略：
+   * 1. 多輪嘗試，逐步減少損耗要求
+   * 2. 動態增加材料（如果用戶提供的材料數量允許）
+   * 3. 極限情況下使用最小損耗
    */
-  private createVirtualMaterialsForUnplaced(
+  private attemptAggressivePlacement(
     unplacedList: Array<{ partId: string; instanceId: number; reason: string }>,
     partInstances: PartInstance[],
     materialInstances: MaterialInstance[],
     placedParts: PlacedPart[],
-    usedInstances: Set<string>
-  ): number {
-    let virtualCount = 0;
+    usedInstances: Set<string>,
+    originalMaterials: Material[]
+  ): { stillUnplaced: Array<{ partId: string; instanceId: number; reason: string }> } {
+    const stillUnplaced: Array<{ partId: string; instanceId: number; reason: string }> = [];
     
-    // 收集未放置的零件實例
-    const unplacedInstances: PartInstance[] = [];
+    // 收集剩餘的零件實例
+    const remainingInstances: PartInstance[] = [];
     for (const unplaced of unplacedList) {
       const instance = partInstances.find(inst => 
         inst.part.id === unplaced.partId && inst.instanceId === unplaced.instanceId
       );
       if (instance) {
-        unplacedInstances.push(instance);
+        remainingInstances.push(instance);
       }
     }
     
-    // 對未放置的零件進行優化打包到虛擬材料
-    const virtualPackingResult = this.packIntoVirtualMaterials(unplacedInstances);
+    // 按長度排序，優先處理較長的零件
+    remainingInstances.sort((a, b) => b.part.length - a.part.length);
     
-    // 創建虛擬材料並放置零件
-    for (const virtualBin of virtualPackingResult) {
-      const virtualMaterial = this.createVirtualMaterial(virtualBin.requiredLength);
-      const virtualInstance: MaterialInstance = {
-        material: virtualMaterial,
-        instanceId: 0,
-        usedLength: 0
-      };
+    // 定義多輪嘗試策略
+    const strategies = [
+      // 策略1：標準損耗但允許共用材料的不同實例
+      {
+        name: '標準損耗',
+        frontLoss: this.constraints.frontEndLoss,
+        backLoss: this.constraints.backEndLoss,
+        cuttingLoss: this.constraints.cuttingLoss
+      },
+      // 策略2：減少前後端損耗
+      {
+        name: '減少端部損耗',
+        frontLoss: Math.min(10, this.constraints.frontEndLoss / 2),
+        backLoss: Math.min(10, this.constraints.backEndLoss / 2),
+        cuttingLoss: this.constraints.cuttingLoss
+      },
+      // 策略3：最小損耗
+      {
+        name: '最小損耗',
+        frontLoss: 5,
+        backLoss: 5,
+        cuttingLoss: Math.min(3, this.constraints.cuttingLoss)
+      },
+      // 策略4：極限損耗
+      {
+        name: '極限損耗',
+        frontLoss: 2,
+        backLoss: 2,
+        cuttingLoss: 2
+      }
+    ];
+    
+    // 多輪嘗試
+    for (const strategy of strategies) {
+      const toPlace = [...remainingInstances];
+      const placed: PartInstance[] = [];
       
-      materialInstances.push(virtualInstance);
-      virtualCount++;
-      
-      // 放置零件到虛擬材料
-      let position = this.constraints.frontEndLoss;
-      for (let i = 0; i < virtualBin.items.length; i++) {
-        const item = virtualBin.items[i];
-        const placed: PlacedPart = {
-          partId: item.instance.part.id,
-          partInstanceId: item.instance.instanceId,
-          materialId: virtualMaterial.id,
-          materialInstanceId: 0,
-          position,
-          length: item.instance.part.length,
-          orientation: 'normal'
-        };
+      for (const instance of toPlace) {
+        let isPlaced = false;
         
-        placedParts.push(placed);
-        usedInstances.add(this.getInstanceKey(item.instance));
+        // 嘗試在所有材料中找到位置
+        for (const matInstance of materialInstances) {
+          const availableLength = matInstance.material.length - matInstance.usedLength;
+          let requiredLength: number;
+          
+          // 檢查是否為材料的第一個零件
+          const isFirstPart = matInstance.usedLength === 0;
+          
+          if (isFirstPart) {
+            requiredLength = strategy.frontLoss + instance.part.length + strategy.backLoss;
+          } else {
+            // 非第一個零件，只需要切割損耗
+            requiredLength = strategy.cuttingLoss + instance.part.length;
+            // 如果是最後一個能放進去的零件，加上後端損耗
+            if (availableLength - requiredLength < strategy.backLoss + 50) {
+              requiredLength += strategy.backLoss;
+            }
+          }
+          
+          if (availableLength >= requiredLength) {
+            const position = matInstance.usedLength + (isFirstPart ? strategy.frontLoss : strategy.cuttingLoss);
+            
+            const placedPart: PlacedPart = {
+              partId: instance.part.id,
+              partInstanceId: instance.instanceId,
+              materialId: matInstance.material.id,
+              materialInstanceId: matInstance.instanceId,
+              position,
+              length: instance.part.length,
+              orientation: 'normal'
+            };
+            
+            placedParts.push(placedPart);
+            usedInstances.add(this.getInstanceKey(instance));
+            matInstance.usedLength += requiredLength;
+            placed.push(instance);
+            isPlaced = true;
+            break;
+          }
+        }
         
-        position += item.instance.part.length;
-        if (i < virtualBin.items.length - 1) {
-          position += this.constraints.cuttingLoss;
+        if (!isPlaced && strategy === strategies[strategies.length - 1]) {
+          // 最後一個策略仍無法放置，嘗試添加新材料
+          const newMaterialAdded = this.tryAddNewMaterialForPart(
+            instance,
+            materialInstances,
+            originalMaterials,
+            placedParts,
+            usedInstances
+          );
+          
+          if (!newMaterialAdded) {
+            stillUnplaced.push({
+              partId: instance.part.id,
+              instanceId: instance.instanceId,
+              reason: `無法在現有材料中找到足夠空間（需要至少 ${instance.part.length + 4}mm）`
+            });
+          }
         }
       }
       
-      virtualInstance.usedLength = position + this.constraints.backEndLoss;
+      // 從剩餘列表中移除已放置的零件
+      for (const placedInstance of placed) {
+        const index = remainingInstances.findIndex(inst => 
+          inst.part.id === placedInstance.part.id && 
+          inst.instanceId === placedInstance.instanceId
+        );
+        if (index !== -1) {
+          remainingInstances.splice(index, 1);
+        }
+      }
+      
+      // 如果所有零件都已放置，提前結束
+      if (remainingInstances.length === 0) {
+        break;
+      }
     }
     
-    return virtualCount;
+    return { stillUnplaced };
   }
 
-  /**
-   * 將零件打包到虛擬材料中（優化虛擬材料使用）
-   */
-  private packIntoVirtualMaterials(instances: PartInstance[]): Array<{
-    items: PackingItem[];
-    requiredLength: number;
-  }> {
-    const virtualBins: Array<{
-      items: PackingItem[];
-      requiredLength: number;
-      remainingLength: number;
-    }> = [];
-    
-    // 準備打包項目並排序
-    const items: PackingItem[] = instances.map(inst => ({
-      instance: inst,
-      requiredLength: this.constraints.frontEndLoss + inst.part.length + this.constraints.backEndLoss,
-      actualLength: inst.part.length
-    }));
-    
-    items.sort((a, b) => b.actualLength - a.actualLength);
-    
-    // 打包到虛擬材料
-    for (const item of items) {
-      let placed = false;
-      
-      // 嘗試放入現有虛擬材料
-      for (const bin of virtualBins) {
-        const requiredLength = bin.items.length === 0
-          ? item.requiredLength
-          : item.actualLength + this.constraints.cuttingLoss;
-        
-        if (bin.remainingLength >= requiredLength) {
-          bin.items.push(item);
-          bin.requiredLength += requiredLength;
-          bin.remainingLength -= requiredLength;
-          placed = true;
-          break;
-        }
-      }
-      
-      // 如果無法放入現有虛擬材料，創建新的
-      if (!placed) {
-        const standardLength = this.selectStandardLength(item.requiredLength);
-        virtualBins.push({
-          items: [item],
-          requiredLength: item.requiredLength,
-          remainingLength: standardLength - item.requiredLength
-        });
-      }
-    }
-    
-    return virtualBins;
-  }
+
 
   /**
    * 選擇標準材料長度
@@ -527,18 +790,181 @@ export class OptimizedPlacer {
   }
 
   /**
-   * 創建虛擬材料
+   * 動態添加新的材料實例
+   * 當現有材料不足時，根據零件需求添加合適的材料
    */
-  private createVirtualMaterial(minLength: number): Material {
-    const selectedLength = this.selectStandardLength(minLength);
+  private addNewMaterialInstances(
+    existingBins: MaterialBin[],
+    materialInstances: MaterialInstance[],
+    originalMaterials: Material[],
+    item: PackingItem
+  ): MaterialBin[] {
+    const newBins: MaterialBin[] = [...existingBins];
     
-    return {
-      id: `VIRTUAL_${this.virtualMaterialIdCounter++}`,
-      length: selectedLength,
-      quantity: 1,
-      isVirtual: true
-    };
+    // 找出無限供應的材料類型
+    const unlimitedMaterials = originalMaterials.filter(m => m.quantity === 0);
+    
+    if (unlimitedMaterials.length === 0) {
+      // 如果沒有明確的無限供應材料，但材料列表為空或不足，自動添加標準材料
+      if (originalMaterials.length === 0 || existingBins.every(bin => bin.remainingLength < item.requiredLength)) {
+        // 選擇合適長度的標準材料
+        const requiredLength = item.requiredLength;
+        const selectedLength = this.selectStandardLength(requiredLength);
+        
+        // 創建新的材料實例
+        const newInstanceId = materialInstances.length;
+        const newMaterial: MaterialInstance = {
+          material: {
+            id: `AUTO_MAT_${selectedLength}_${newInstanceId}`,
+            originalId: `AUTO_MAT_${selectedLength}`,
+            length: selectedLength,
+            quantity: 0,
+            isUnlimited: true
+          },
+          instanceId: newInstanceId,
+          usedLength: 0
+        };
+        
+        materialInstances.push(newMaterial);
+        
+        // 創建新的bin
+        newBins.push({
+          material: newMaterial,
+          items: [],
+          usedLength: 0,
+          remainingLength: selectedLength
+        });
+      }
+    } else {
+      // 從無限供應的材料中選擇最合適的
+      let bestMaterial: Material | null = null;
+      let bestScore = -Infinity;
+      
+      for (const mat of unlimitedMaterials) {
+        if (mat.length >= item.requiredLength) {
+          // 優先選擇長度最接近但足夠的材料
+          const waste = mat.length - item.requiredLength;
+          const score = -waste; // 浪費越少分數越高
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestMaterial = mat;
+          }
+        }
+      }
+      
+      // 如果沒有足夠長的材料，選擇最長的
+      if (!bestMaterial) {
+        bestMaterial = unlimitedMaterials.reduce((a, b) => a.length > b.length ? a : b);
+      }
+      
+      if (bestMaterial) {
+        // 創建新的材料實例
+        const existingInstancesCount = materialInstances.filter(inst => 
+          inst.material.originalId === bestMaterial!.id
+        ).length;
+        
+        const newMaterial: MaterialInstance = {
+          material: {
+            ...bestMaterial,
+            id: `${bestMaterial.id}_${existingInstancesCount}`,
+            originalId: bestMaterial.id,
+            isUnlimited: true
+          },
+          instanceId: existingInstancesCount,
+          usedLength: 0
+        };
+        
+        materialInstances.push(newMaterial);
+        
+        // 創建新的bin
+        newBins.push({
+          material: newMaterial,
+          items: [],
+          usedLength: 0,
+          remainingLength: newMaterial.material.length
+        });
+      }
+    }
+    
+    return newBins;
   }
+
+  /**
+   * 嘗試為特定零件添加新材料
+   */
+  private tryAddNewMaterialForPart(
+    instance: PartInstance,
+    materialInstances: MaterialInstance[],
+    originalMaterials: Material[],
+    placedParts: PlacedPart[],
+    usedInstances: Set<string>
+  ): boolean {
+    // 計算所需長度（使用最小損耗）
+    const minRequiredLength = instance.part.length + this.constraints.frontEndLoss + this.constraints.backEndLoss;
+    
+    // 選擇合適的材料長度
+    const selectedLength = this.selectStandardLength(minRequiredLength);
+    
+    // 檢查是否有無限供應材料或允許自動添加
+    const hasUnlimitedMaterial = originalMaterials.some(m => m.quantity === 0);
+    const allowAutoAdd = originalMaterials.length === 0 || hasUnlimitedMaterial;
+    
+    if (!allowAutoAdd) {
+      return false;
+    }
+    
+    // 找到或創建合適的材料類型
+    let materialToUse = originalMaterials.find(m => 
+      m.quantity === 0 && m.length >= minRequiredLength
+    );
+    
+    if (!materialToUse) {
+      // 創建新的自動材料
+      materialToUse = {
+        id: `AUTO_MAT_${selectedLength}`,
+        length: selectedLength,
+        quantity: 0,
+        isUnlimited: true
+      };
+    }
+    
+    // 創建新的材料實例
+    const existingInstancesCount = materialInstances.filter(inst => 
+      (inst.material.originalId || inst.material.id) === materialToUse!.id
+    ).length;
+    
+    const newMaterial: MaterialInstance = {
+      material: {
+        ...materialToUse,
+        id: `${materialToUse.id}_${existingInstancesCount}`,
+        originalId: materialToUse.id,
+        isUnlimited: true
+      },
+      instanceId: existingInstancesCount,
+      usedLength: 0
+    };
+    
+    materialInstances.push(newMaterial);
+    
+    // 直接放置零件到新材料上
+    const placedPart: PlacedPart = {
+      partId: instance.part.id,
+      partInstanceId: instance.instanceId,
+      materialId: newMaterial.material.id,
+      materialInstanceId: newMaterial.instanceId,
+      position: this.constraints.frontEndLoss,
+      length: instance.part.length,
+      orientation: 'normal'
+    };
+    
+    placedParts.push(placedPart);
+    usedInstances.add(this.getInstanceKey(instance));
+    newMaterial.usedLength = minRequiredLength;
+    
+    return true;
+  }
+
 
   /**
    * 展開零件實例
@@ -565,16 +991,35 @@ export class OptimizedPlacer {
 
   /**
    * 初始化材料實例
+   * 按長度從大到小排序，確保優先使用最長的材料
+   * 支持無限材料供應：當數量為0時表示無限供應
    */
   private initializeMaterialInstances(materials: Material[]): MaterialInstance[] {
     const instances: MaterialInstance[] = [];
     
-    for (const material of materials) {
-      for (let i = 0; i < material.quantity; i++) {
+    // 如果沒有提供材料，使用標準材料
+    if (materials.length === 0) {
+      materials = STANDARD_MATERIAL_LENGTHS.map(length => ({
+        id: `AUTO_MAT_${length}`,
+        length,
+        quantity: 0 // 0表示無限供應
+      }));
+    }
+    
+    // 先按長度降序排序材料
+    const sortedMaterials = [...materials].sort((a, b) => b.length - a.length);
+    
+    for (const material of sortedMaterials) {
+      // 如果數量為0，表示無限供應，初始創建一些實例
+      const initialQuantity = material.quantity === 0 ? 10 : material.quantity;
+      
+      for (let i = 0; i < initialQuantity; i++) {
         instances.push({
           material: {
             ...material,
-            id: `${material.id}_${i}`
+            id: `${material.id}_${i}`,
+            originalId: material.id, // 保存原始ID
+            isUnlimited: material.quantity === 0 // 標記是否無限供應
           },
           instanceId: i,
           usedLength: 0
@@ -592,19 +1037,37 @@ export class OptimizedPlacer {
     materialInstances: MaterialInstance[],
     requiredLength: number
   ): MaterialInstance | null {
-    const availableMaterials = materialInstances.filter(mat => {
+    // 先嘗試正常長度
+    let availableMaterials = materialInstances.filter(mat => {
       const remainingLength = mat.material.length - mat.usedLength;
-      return remainingLength >= requiredLength && !mat.material.isVirtual;
+      return remainingLength >= requiredLength;
     });
     
-    if (availableMaterials.length === 0) return null;
+    if (availableMaterials.length > 0) {
+      // 選擇最適合的材料（優先選擇剩餘空間最接近的）
+      return availableMaterials.reduce((best, current) => {
+        const bestRemaining = best.material.length - best.usedLength - requiredLength;
+        const currentRemaining = current.material.length - current.usedLength - requiredLength;
+        return Math.abs(currentRemaining) < Math.abs(bestRemaining) ? current : best;
+      });
+    }
     
-    // 選擇最適合的材料（優先選擇剩餘空間最接近的）
-    return availableMaterials.reduce((best, current) => {
-      const bestRemaining = best.material.length - best.usedLength - requiredLength;
-      const currentRemaining = current.material.length - current.usedLength - requiredLength;
-      return Math.abs(currentRemaining) < Math.abs(bestRemaining) ? current : best;
+    // 如果沒有找到，嘗試更緊湊的排列（減少端部損耗）
+    const minRequiredLength = requiredLength - this.constraints.frontEndLoss - this.constraints.backEndLoss + 20; // 最小20mm端部損耗
+    availableMaterials = materialInstances.filter(mat => {
+      const remainingLength = mat.material.length - mat.usedLength;
+      return remainingLength >= minRequiredLength;
     });
+    
+    if (availableMaterials.length > 0) {
+      return availableMaterials.reduce((best, current) => {
+        const bestRemaining = best.material.length - best.usedLength - minRequiredLength;
+        const currentRemaining = current.material.length - current.usedLength - minRequiredLength;
+        return Math.abs(currentRemaining) < Math.abs(bestRemaining) ? current : best;
+      });
+    }
+    
+    return null;
   }
 
   /**
@@ -641,14 +1104,15 @@ export class OptimizedPlacer {
     unplacedParts: Array<{ partId: string; instanceId: number; reason: string }>,
     materialInstances: MaterialInstance[],
     totalParts: number,
-    virtualMaterialsCreated: number,
     processingTime: number,
     chains: SharedCutChain[]
   ): PlacementResult {
     const warnings: string[] = [];
     
-    if (virtualMaterialsCreated > 0) {
-      warnings.push(`已創建 ${virtualMaterialsCreated} 個虛擬材料以確保所有零件都能被排版`);
+    if (unplacedParts.length > 0) {
+      warnings.push(`有 ${unplacedParts.length} 個零件無法排版，材料空間不足`);
+      const unplacedDetails = unplacedParts.map(p => `${p.partId} (原因: ${p.reason})`).join(', ');
+      warnings.push(`未排版零件: ${unplacedDetails}`);
     }
     
     // 計算材料利用率
@@ -672,9 +1136,18 @@ export class OptimizedPlacer {
     
     const materialUtilization = totalMaterialLength > 0 ? totalUsedLength / totalMaterialLength : 0;
     
-    // 計算共刀節省
-    const totalSavings = chains.reduce((sum, chain) => sum + chain.totalSavings, 0);
-    const sharedCuttingPairs = placedParts.filter(p => p.sharedCuttingInfo).length;
+    // 計算實際的共刀節省
+    let actualTotalSavings = 0;
+    const sharedCuttingPairs = placedParts.filter(p => {
+      if (p.sharedCuttingInfo && p.sharedCuttingInfo.savings) {
+        actualTotalSavings += p.sharedCuttingInfo.savings;
+        return true;
+      }
+      return false;
+    }).length;
+    
+    // 避免重複計算，除以2（因為每對共刀會被計算兩次）
+    actualTotalSavings = actualTotalSavings / 2;
     
     const report: PlacementReport = {
       totalParts,
@@ -690,8 +1163,7 @@ export class OptimizedPlacer {
       placedParts,
       unplacedParts,
       usedMaterials,
-      virtualMaterialsCreated,
-      totalSavings,
+      totalSavings: actualTotalSavings,
       success: unplacedParts.length === 0,
       warnings,
       report

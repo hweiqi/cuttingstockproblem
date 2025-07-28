@@ -138,8 +138,8 @@ function demonstrateV6System() {
   console.log(`\n結果：`);
   console.log(`- 已排版零件：${result3.placedParts.length}`);
   console.log(`- 未排版零件：${result3.unplacedParts.length}`);
-  console.log(`- 虛擬材料創建：${result3.virtualMaterialsCreated}`);
-  console.log(`- 說明：系統自動創建虛擬材料，確保所有零件都被排版`);
+  console.log(`- 使用材料數：${result3.usedMaterials.length}`);
+  console.log(`- 說明：材料不足時，系統會報告未能排版的零件`);
   
   // 示例4：複雜生產場景
   console.log('\n\n示例4：複雜生產場景優化');

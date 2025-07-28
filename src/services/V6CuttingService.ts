@@ -25,7 +25,6 @@ export class V6CuttingService {
     this.v6System = new V6System({
       angleTolerance: 5,
       prioritizeMixedChains: true,
-      useOptimizedPlacer: true,  // 啟用優化排版器
       constraints: this.currentConstraints
     });
   }
@@ -44,7 +43,6 @@ export class V6CuttingService {
     this.v6System = new V6System({
       angleTolerance: 5,
       prioritizeMixedChains: true,
-      useOptimizedPlacer: true,  // 啟用優化排版器
       constraints: this.currentConstraints
     });
   }
@@ -150,59 +148,6 @@ export class V6CuttingService {
       }
     }
 
-    // 處理虛擬材料（如果有）
-    if (result.virtualMaterialsCreated > 0) {
-      const virtualParts = result.placedParts.filter(p => 
-        p.materialId.startsWith('VIRTUAL_')
-      );
-      
-      // 按虛擬材料分組
-      const virtualGroups = new Map<string, typeof virtualParts>();
-      for (const part of virtualParts) {
-        if (!virtualGroups.has(part.materialId)) {
-          virtualGroups.set(part.materialId, []);
-        }
-        virtualGroups.get(part.materialId)!.push(part);
-      }
-
-      // 為每個虛擬材料創建計劃
-      for (const [virtualId, parts] of virtualGroups) {
-        const virtualMat = result.usedMaterials.find(m => m.material.id === virtualId);
-        if (!virtualMat) continue;
-
-        const sortedParts = parts.sort((a, b) => a.position - b.position);
-        
-        const cuts = sortedParts.map(p => ({
-          partId: p.partId,
-          position: p.position,
-          length: p.length,
-          isSharedCut: !!p.sharedCuttingInfo || (p as any).isSharedCut,
-          sharedWith: (p as any).sharedWith,
-          angleSavings: (p as any).angleSavings || p.sharedCuttingInfo?.savings
-        }));
-        
-        const cutPlan: CutPlan = {
-          materialId: `VIRTUAL_${cutPlans.length}`,
-          materialLength: virtualMat.material.length,
-          parts: cuts.map(c => ({
-            partId: c.partId,
-            length: c.length,
-            position: c.position,
-            isSharedCut: c.isSharedCut,
-            sharedWith: c.sharedWith,
-            angleSavings: c.angleSavings
-          })),
-          cuts: cuts,
-          wasteLength: this.calculateWaste(sortedParts, virtualMat.material.length),
-          efficiency: this.calculateEfficiency(sortedParts, virtualMat.material.length),
-          utilization: this.calculateUtilization(sortedParts, virtualMat.material.length),
-          waste: this.calculateWaste(sortedParts, virtualMat.material.length),
-          isVirtual: true
-        };
-        
-        cutPlans.push(cutPlan);
-      }
-    }
 
     return cutPlans;
   }

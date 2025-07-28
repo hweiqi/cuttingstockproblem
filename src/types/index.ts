@@ -43,7 +43,6 @@ export interface CutPlan {
   utilization?: number;
   waste?: number;
   instanceId?: number;
-  isVirtual?: boolean;
 }
 
 export interface PlacedPart {

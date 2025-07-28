@@ -4,8 +4,9 @@
 export interface Material {
   id: string;          // 材料ID
   length: number;      // 材料長度
-  quantity: number;    // 材料數量
-  isVirtual?: boolean; // 是否為虛擬材料
+  quantity: number;    // 材料數量（0表示無限供應）
+  originalId?: string; // 原始材料ID（用於追蹤動態創建的實例）
+  isUnlimited?: boolean; // 是否為無限供應
 }
 
 /**
@@ -51,7 +52,6 @@ export interface PlacementResult {
     instanceId: number;
     utilization: number;
   }>;
-  virtualMaterialsCreated: number;
   totalSavings: number;
   success: boolean;
   warnings: string[];

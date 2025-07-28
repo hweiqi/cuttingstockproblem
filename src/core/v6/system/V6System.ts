@@ -2,7 +2,6 @@ import { PartWithQuantity } from '../models/Part';
 import { Material, PlacementResult } from '../models/Material';
 import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
 import { DynamicChainBuilder } from '../optimization/DynamicChainBuilder';
-import { GuaranteedPlacer } from '../placement/GuaranteedPlacer';
 import { OptimizedPlacer } from '../../../placement/OptimizedPlacer';
 
 /**
@@ -30,7 +29,6 @@ export interface V6SystemConfig {
   angleTolerance?: number;           // 角度容差（度）
   maxChainSize?: number;            // 最大鏈大小
   prioritizeMixedChains?: boolean;  // 優先混合鏈
-  useOptimizedPlacer?: boolean;     // 使用優化排版器
   constraints?: {
     cuttingLoss?: number;
     frontEndLoss?: number;
@@ -44,12 +42,12 @@ export interface V6SystemConfig {
  * 特點：
  * 1. 靈活的角度匹配（支援容差和交叉匹配）
  * 2. 動態共刀鏈構建（支援混合零件）
- * 3. 保證完整排版（必要時使用虛擬材料）
+ * 3. 優化排版邏輯以減少材料使用
  */
 export class V6System {
   private matcher: FlexibleAngleMatcher;
   private chainBuilder: DynamicChainBuilder;
-  private placer: GuaranteedPlacer | OptimizedPlacer;
+  private placer: OptimizedPlacer;
   private config: V6SystemConfig;
 
   constructor(config?: V6SystemConfig) {
@@ -63,12 +61,8 @@ export class V6System {
     this.matcher = new FlexibleAngleMatcher(this.config.angleTolerance);
     this.chainBuilder = new DynamicChainBuilder(this.config.angleTolerance);
     
-    // 根據配置選擇排版器
-    if (this.config.useOptimizedPlacer) {
-      this.placer = new OptimizedPlacer(this.config.constraints);
-    } else {
-      this.placer = new GuaranteedPlacer(this.config.constraints);
-    }
+    // 使用優化排版器
+    this.placer = new OptimizedPlacer(this.config.constraints);
   }
 
   /**
@@ -157,7 +151,7 @@ export class V6System {
     }
     
     if (config.constraints !== undefined) {
-      this.placer = new GuaranteedPlacer(config.constraints);
+      this.placer = new OptimizedPlacer(config.constraints);
     }
   }
 
@@ -185,7 +179,7 @@ export class V6System {
     report.push(`  已排版零件: ${result.placedParts.length}`);
     report.push(`  未排版零件: ${result.unplacedParts.length}`);
     report.push(`  材料利用率: ${(result.report.materialUtilization * 100).toFixed(2)}%`);
-    report.push(`  虛擬材料: ${result.virtualMaterialsCreated}`);
+    report.push(`  使用材料數: ${result.usedMaterials.length}`);
     report.push('');
     
     report.push('性能指標:');
