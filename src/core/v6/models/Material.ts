@@ -77,6 +77,5 @@ export interface PlacementReport {
 export interface PlacementConstraints {
   cuttingLoss: number;     // 切割損耗
   frontEndLoss: number;    // 前端損耗
-  backEndLoss: number;     // 後端損耗
   minPartSpacing?: number; // 最小零件間距
 }

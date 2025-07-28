@@ -10,7 +10,6 @@ export class OptimizedPlacerV2 {
   private readonly DEFAULT_CONSTRAINTS: PlacementConstraints = {
     cuttingLoss: 5,
     frontEndLoss: 20,
-    backEndLoss: 15,
     minPartSpacing: 0
   };
   
@@ -110,7 +109,7 @@ export class OptimizedPlacerV2 {
     // 準備打包項目
     const items: PackingItem[] = instances.map(inst => ({
       instance: inst,
-      requiredLength: this.constraints.frontEndLoss + inst.part.length + this.constraints.backEndLoss,
+      requiredLength: this.constraints.frontEndLoss + inst.part.length,
       actualLength: inst.part.length
     }));
     
@@ -206,25 +205,21 @@ export class OptimizedPlacerV2 {
       {
         name: '標準損耗',
         frontLoss: this.constraints.frontEndLoss,
-        backLoss: this.constraints.backEndLoss,
         cuttingLoss: this.constraints.cuttingLoss
       },
       {
         name: '減少端部損耗',
         frontLoss: Math.min(10, this.constraints.frontEndLoss / 2),
-        backLoss: Math.min(10, this.constraints.backEndLoss / 2),
         cuttingLoss: this.constraints.cuttingLoss
       },
       {
         name: '最小損耗',
         frontLoss: 5,
-        backLoss: 5,
         cuttingLoss: Math.min(3, this.constraints.cuttingLoss)
       },
       {
         name: '極限損耗',
         frontLoss: 2,
-        backLoss: 2,
         cuttingLoss: 2
       }
     ];
@@ -240,7 +235,7 @@ export class OptimizedPlacerV2 {
         // 嘗試在所有材料中找到位置
         for (const matInstance of materialInstances) {
           // 檢查材料本身是否足夠長
-          if (matInstance.material.length < instance.part.length + strategy.frontLoss + strategy.backLoss) {
+          if (matInstance.material.length < instance.part.length + strategy.frontLoss) {
             continue;
           }
           
@@ -249,12 +244,9 @@ export class OptimizedPlacerV2 {
           
           let requiredLength: number;
           if (isFirstPart) {
-            requiredLength = strategy.frontLoss + instance.part.length + strategy.backLoss;
+            requiredLength = strategy.frontLoss + instance.part.length;
           } else {
             requiredLength = strategy.cuttingLoss + instance.part.length;
-            if (availableLength - requiredLength < strategy.backLoss + 50) {
-              requiredLength += strategy.backLoss;
-            }
           }
           
           if (availableLength >= requiredLength) {
@@ -286,7 +278,7 @@ export class OptimizedPlacerV2 {
             instanceId: instance.instanceId,
             reason: instance.part.length > Math.max(...originalMaterials.map(m => m.length || 0))
               ? `零件長度(${instance.part.length}mm)超出所有材料長度不足`
-              : `無法在現有材料中找到足夠空間（需要至少 ${instance.part.length + strategy.frontLoss + strategy.backLoss}mm）`
+              : `無法在現有材料中找到足夠空間（需要至少 ${instance.part.length + strategy.frontLoss}mm）`
           });
         }
       }

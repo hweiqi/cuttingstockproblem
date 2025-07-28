@@ -134,13 +134,13 @@ describe('V6CuttingService - Efficiency Calculation', () => {
         { id: 'part1', length: 2000, quantity: 1 }
       ];
 
-      // Used: 10 + 2000 + 10 = 2020mm
-      // Waste: 6000 - 2020 = 3980mm
+      // Used: 10 + 2000 = 2010mm (移除後端損耗)
+      // Waste: 6000 - 2010 = 3990mm
 
       const result = service.optimizeCutting(materials, parts);
       
-      expect(result[0].wasteLength).toBe(3980);
-      expect(result[0].waste).toBe(3980);
+      expect(result[0].wasteLength).toBe(3990);
+      expect(result[0].waste).toBe(3990);
     });
 
     it('should show correct waste for multiple parts', () => {
@@ -170,14 +170,14 @@ describe('V6CuttingService - Efficiency Calculation', () => {
   describe('Edge Cases', () => {
     it('should handle material that is exactly filled', () => {
       const materials: Material[] = [
-        { id: 'mat1', length: 2020 }
+        { id: 'mat1', length: 2010 }
       ];
 
       const parts: Part[] = [
         { id: 'part1', length: 2000, quantity: 1 }
       ];
 
-      // Used: 10 + 2000 + 10 = 2020mm (exactly)
+      // Used: 10 + 2000 = 2010mm (exactly, 無後端損耗)
       // Waste: 0mm
       // Efficiency: 100%
 

@@ -30,15 +30,6 @@ export const CuttingStockApp: React.FC = () => {
     }
   };
 
-  const handleAddMaterialWithQuantity = (length: number, quantity: number) => {
-    try {
-      const material = materialService.addMaterialWithQuantity(length, quantity);
-      setMaterials([...materials, material]);
-      setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '新增母材時發生錯誤');
-    }
-  };
 
   const handleRemoveMaterial = (id: string) => {
     materialService.removeMaterial(id);
@@ -177,7 +168,6 @@ export const CuttingStockApp: React.FC = () => {
           <MaterialInput
             materials={materials}
             onAddMaterial={handleAddMaterial}
-            onAddMaterialWithQuantity={handleAddMaterialWithQuantity}
             onRemoveMaterial={handleRemoveMaterial}
           />
           
@@ -221,9 +211,6 @@ export const CuttingStockApp: React.FC = () => {
                 className="input input-sm"
               />
               <small>（材料前端的預留空間）</small>
-            </div>
-            <div className="setting-note">
-              <small>註：後端切割損耗固定為 10mm</small>
             </div>
           </div>
           

@@ -8,8 +8,7 @@ describe('OptimizedPlacerV2', () => {
   beforeEach(() => {
     placer = new OptimizedPlacerV2({
       cuttingLoss: 5,
-      frontEndLoss: 20,
-      backEndLoss: 15
+      frontEndLoss: 20
     });
   });
 

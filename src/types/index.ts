@@ -25,6 +25,7 @@ export interface CutPlan {
   parts: PlacedPart[];
   wasteLength: number;
   efficiency: number;
+  isVirtual?: boolean;
   sharedCutPairs?: Array<{
     part1Id: string;
     part2Id: string;

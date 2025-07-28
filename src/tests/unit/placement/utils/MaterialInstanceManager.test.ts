@@ -63,13 +63,13 @@ describe('MaterialInstanceManager', () => {
   describe('addNewInstances', () => {
     it('應該為無限供應材料添加新實例', () => {
       const existingInstances = [
-        { material: { id: 'M1_0', originalId: 'M1', length: 6000, isUnlimited: true }, instanceId: 0, usedLength: 0 }
+        { material: { id: 'M1_0', originalId: 'M1', length: 6000, quantity: 0, isUnlimited: true }, instanceId: 0, usedLength: 0 }
       ];
       const originalMaterials: Material[] = [
         { id: 'M1', length: 6000, quantity: 0 }
       ];
       const item: PackingItem = {
-        instance: { part: { id: 'P1', length: 2000, angles: {}, thickness: 20 }, instanceId: 0 },
+        instance: { part: { id: 'P1', length: 2000, angles: { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 }, thickness: 20 }, instanceId: 0 },
         requiredLength: 2040,
         actualLength: 2000
       };
@@ -89,7 +89,7 @@ describe('MaterialInstanceManager', () => {
         { id: 'M1', length: 6000, quantity: 1 }
       ];
       const item: PackingItem = {
-        instance: { part: { id: 'P1', length: 2000, angles: {}, thickness: 20 }, instanceId: 0 },
+        instance: { part: { id: 'P1', length: 2000, angles: { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 }, thickness: 20 }, instanceId: 0 },
         requiredLength: 2040,
         actualLength: 2000
       };
@@ -124,7 +124,7 @@ describe('MaterialInstanceManager', () => {
         { id: 'M1', length: 6000, quantity: 0 }
       ];
       const item: PackingItem = {
-        instance: { part: { id: 'P1', length: 2000, angles: {}, thickness: 20 }, instanceId: 0 },
+        instance: { part: { id: 'P1', length: 2000, angles: { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 }, thickness: 20 }, instanceId: 0 },
         requiredLength: 2040,
         actualLength: 2000
       };

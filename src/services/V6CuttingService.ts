@@ -12,14 +12,12 @@ export class V6CuttingService {
   private currentConstraints: {
     cuttingLoss: number;
     frontEndLoss: number;
-    backEndLoss: number;
   };
 
   constructor() {
     this.currentConstraints = {
       cuttingLoss: 3,
-      frontEndLoss: 10,
-      backEndLoss: 10
+      frontEndLoss: 10
     };
     
     this.v6System = new V6System({
@@ -35,8 +33,7 @@ export class V6CuttingService {
   updateConstraints(cuttingLoss: number, frontEndLoss: number): void {
     this.currentConstraints = {
       cuttingLoss,
-      frontEndLoss,
-      backEndLoss: 10 // 固定後端損耗為10
+      frontEndLoss
     };
     
     // 重新建立系統以應用新配置
@@ -193,8 +190,8 @@ export class V6CuttingService {
     // 找到最後一個零件
     const lastPart = parts[parts.length - 1];
     
-    // 實際使用長度 = 最後一個零件的位置 + 零件長度 + 後端損耗
-    const actualUsedLength = lastPart.position + lastPart.length + this.currentConstraints.backEndLoss;
+    // 實際使用長度 = 最後一個零件的位置 + 零件長度
+    const actualUsedLength = lastPart.position + lastPart.length;
     
     return actualUsedLength;
   }

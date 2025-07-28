@@ -51,7 +51,7 @@ export class ChainPlacer {
   }
 
   private calculateChainLength(instances: PartInstance[], chain: SharedCutChain): number {
-    let totalLength = this.constraints.frontEndLoss + this.constraints.backEndLoss;
+    let totalLength = this.constraints.frontEndLoss;
     
     for (let i = 0; i < instances.length; i++) {
       totalLength += instances[i].part.length;
@@ -83,7 +83,7 @@ export class ChainPlacer {
       });
     }
     
-    const minRequiredLength = requiredLength - this.constraints.frontEndLoss - this.constraints.backEndLoss + 20;
+    const minRequiredLength = requiredLength - this.constraints.frontEndLoss + 20;
     availableMaterials = materialInstances.filter(mat => {
       const remainingLength = mat.material.length - mat.usedLength;
       return remainingLength >= minRequiredLength;
@@ -158,7 +158,7 @@ export class ChainPlacer {
       }
     }
     
-    material.usedLength = position - this.constraints.cuttingLoss + this.constraints.backEndLoss;
+    material.usedLength = position - this.constraints.cuttingLoss;
   }
 
   private placeSplitChain(

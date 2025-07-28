@@ -143,7 +143,10 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                               <div>共刀角度: {formatAngle((part as any).matchedAngle)}</div>
                             )}
                             {(part as any).angleSavings && (
-                              <div className="savings">節省: {(part as any).angleSavings.toFixed(2)} mm</div>
+                              <div className="savings">
+                                <span className="savings-icon">💰</span>
+                                本次共刀節省: {(part as any).angleSavings.toFixed(2)} mm
+                              </div>
                             )}
                             {(part as any).part1Angles && (
                               <div className="angle-info">
@@ -178,11 +181,25 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                     {partIndex < (plan.cuts || plan.parts).length - 1 && (
                       <div className="cutting-loss">
                         {part.isSharedCut ? (
-                          <div className="shared-cut-indicator">
-                            共刀連接
+                          <div className="shared-cut-connection">
+                            <div className="shared-cut-indicator">
+                              ✨ 共刀連接 ✨
+                            </div>
+                            {(part as any).angleSavings && (
+                              <div className="shared-cut-details">
+                                <div className="saving-amount">
+                                  節省材料: {(part as any).angleSavings.toFixed(2)} mm
+                                </div>
+                                <div className="cutting-note">
+                                  (共刀切割正常損耗: {cuttingLoss} mm)
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <>切割損耗: {cuttingLoss} mm</>
+                          <div className="normal-cut">
+                            ✂️ 切割損耗: {cuttingLoss} mm
+                          </div>
                         )}
                       </div>
                     )}
@@ -269,6 +286,16 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
         .savings {
           color: #28a745;
           font-weight: bold;
+          background-color: #d4edda;
+          padding: 4px 8px;
+          border-radius: 3px;
+          border: 1px solid #c3e6cb;
+          display: inline-block;
+          margin-top: 5px;
+        }
+        
+        .savings-icon {
+          margin-right: 4px;
         }
 
         .unplaced-parts {
@@ -364,16 +391,45 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
         .cutting-loss {
           text-align: center;
           font-size: 12px;
-          color: #f44336;
-          padding: 5px;
-          background-color: #ffebee;
-          border-radius: 3px;
+          padding: 8px;
+          border-radius: 4px;
+          margin: 5px 0;
+        }
+        
+        .shared-cut-connection {
+          background-color: #e8f5e9;
+          border: 1px solid #4caf50;
         }
         
         .shared-cut-indicator {
-          color: #2196f3;
+          color: #2e7d32;
           font-weight: bold;
+          font-size: 13px;
+          margin-bottom: 5px;
+        }
+        
+        .shared-cut-details {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        
+        .saving-amount {
+          color: #1b5e20;
+          font-weight: bold;
+          font-size: 12px;
+        }
+        
+        .cutting-note {
+          color: #558b2f;
+          font-size: 11px;
           font-style: italic;
+        }
+        
+        .normal-cut {
+          color: #f44336;
+          background-color: #ffebee;
+          border: 1px solid #ffcdd2;
         }
 
         .plan-summary {

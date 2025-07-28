@@ -4,19 +4,15 @@ import { Material } from '../types';
 interface MaterialInputProps {
   materials: Material[];
   onAddMaterial: (length: number) => void;
-  onAddMaterialWithQuantity: (length: number, quantity: number) => void;
   onRemoveMaterial: (id: string) => void;
 }
 
 export const MaterialInput: React.FC<MaterialInputProps> = ({
   materials,
   onAddMaterial,
-  onAddMaterialWithQuantity,
   onRemoveMaterial
 }) => {
   const [length, setLength] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [useCustomQuantity, setUseCustomQuantity] = useState(false);
   const [error, setError] = useState('');
 
   const handleAdd = () => {
@@ -32,20 +28,9 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
       return;
     }
 
-    if (useCustomQuantity) {
-      const quantityNum = parseInt(quantity);
-      if (quantity !== '' && (isNaN(quantityNum) || quantityNum < 0)) {
-        setError('數量必須是非負整數（0表示無限供應）');
-        return;
-      }
-      const finalQuantity = quantity === '' ? 0 : quantityNum;
-      onAddMaterialWithQuantity(lengthNum, finalQuantity);
-    } else {
-      onAddMaterial(lengthNum);
-    }
+    onAddMaterial(lengthNum);
 
     setLength('');
-    setQuantity('');
     setError('');
   };
 
@@ -54,7 +39,7 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
       <h2>母材設定</h2>
       <p style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>
         設定可用的母材長度，系統會自動選擇效率最高、餘料最少的母材進行排版。
-        預設為無限供應，可設定特定數量。
+        所有母材均為無限供應。
       </p>
       
       <div className="input-section">
@@ -68,33 +53,6 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
           />
         </div>
         
-        <div className="quantity-section">
-          <label className="checkbox-container">
-            <input
-              type="checkbox"
-              checked={useCustomQuantity}
-              onChange={(e) => setUseCustomQuantity(e.target.checked)}
-            />
-            <span className="checkmark"></span>
-            設定數量限制
-          </label>
-          
-          {useCustomQuantity && (
-            <div className="quantity-input">
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="數量 (空白或0=無限)"
-                className="input input-sm"
-                min="0"
-              />
-              <small style={{ color: '#666', fontSize: '12px' }}>
-                0 或空白表示無限供應
-              </small>
-            </div>
-          )}
-        </div>
         
         <button onClick={handleAdd} className="btn btn-primary">
           新增母材
@@ -113,7 +71,7 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
                 <div className="material-info">
                   <span className="material-length">長度: {material.length} mm</span>
                   <span className="material-quantity">
-                    數量: {material.quantity === 0 ? '無限供應' : `${material.quantity} 支`}
+                    數量: 無限供應
                   </span>
                 </div>
                 <button
@@ -140,35 +98,6 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
           flex-direction: column;
         }
         
-        .quantity-section {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          padding: 15px;
-          background-color: #f8f9fa;
-          border-radius: 8px;
-          border: 1px solid #e9ecef;
-        }
-        
-        .checkbox-container {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-        
-        .checkbox-container input[type="checkbox"] {
-          margin: 0;
-          cursor: pointer;
-        }
-        
-        .quantity-input {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-          margin-left: 20px;
-        }
         
         .input-sm {
           max-width: 200px;

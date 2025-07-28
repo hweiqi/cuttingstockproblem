@@ -36,7 +36,7 @@ export class BestFitDecreasingStrategy implements IPackingStrategy {
         : item.actualLength + this.constraints.cuttingLoss;
       
       if (bin.remainingLength >= requiredLength) {
-        const score = this.calculateBinScore(bin, item, requiredLength);
+        const score = this.calculateBinScore(bin, item, requiredLength, longestBins);
         if (score > bestScore) {
           bestScore = score;
           bestBin = bin;
@@ -44,24 +44,31 @@ export class BestFitDecreasingStrategy implements IPackingStrategy {
       }
     }
     
+    // 根據需求，優先使用最長材料，降低效率門檻
     if (bestBin) {
       const efficiency = this.calculateBinEfficiency(bestBin, item);
-      if (bestBin.items.length > 0 || (bestBin.items.length === 0 && efficiency >= 0.05) || efficiency >= 0.2) {
+      // 更寬松的條件：只要材料能放得下，就優先使用最長材料
+      if (bestBin.items.length > 0 || efficiency >= 0.01) {
         return bestBin;
       }
     }
     
-    // 否則考慮其他長度的材料
+    // 如果最長材料實在不合適，才考慮其他長度的材料
+    // 但仍然按長度降序優先考慮
+    const sortedBins = [...bins].sort((a, b) => b.material.material.length - a.material.material.length);
     bestScore = -Infinity;
     bestBin = null;
     
-    for (const bin of bins) {
+    for (const bin of sortedBins) {
+      // 跳過已經檢查過的最長材料
+      if (bin.material.material.length === maxMaterialLength) continue;
+      
       const requiredLength = bin.items.length === 0 
         ? item.requiredLength
         : item.actualLength + this.constraints.cuttingLoss;
       
       if (bin.remainingLength >= requiredLength) {
-        const score = this.calculateBinScore(bin, item, requiredLength);
+        const score = this.calculateBinScore(bin, item, requiredLength, bins);
         if (score > bestScore) {
           bestScore = score;
           bestBin = bin;
@@ -72,10 +79,11 @@ export class BestFitDecreasingStrategy implements IPackingStrategy {
     return bestBin;
   }
 
-  private calculateBinScore(bin: MaterialBin, item: PackingItem, requiredLength: number): number {
+  private calculateBinScore(bin: MaterialBin, item: PackingItem, requiredLength: number, bins?: MaterialBin[]): number {
     const remainingAfter = bin.remainingLength - requiredLength;
     let score = 0;
     
+    // 基本計分
     if (remainingAfter >= 0 && remainingAfter < this.constraints.cuttingLoss) {
       score = 10000;
     } else if (remainingAfter >= 0 && remainingAfter < 500) {
@@ -102,6 +110,15 @@ export class BestFitDecreasingStrategy implements IPackingStrategy {
       score -= 30;
     }
     
+    // 重要：根據材料長度給予額外加分，最長材料優先
+    if (bins) {
+      const maxLength = Math.max(...bins.map(b => b.material.material.length));
+      const lengthRatio = bin.material.material.length / maxLength;
+      // 最長材料獲得最高加分，其他材料按比例加分
+      const lengthBonus = lengthRatio * 500; // 重要：給予長材料額外500分的優勢
+      score += lengthBonus;
+    }
+    
     return score;
   }
 
@@ -122,12 +139,6 @@ export class BestFitDecreasingStrategy implements IPackingStrategy {
       actualUsed = Math.min(item.requiredLength, bin.remainingLength);
     } else {
       actualUsed = item.actualLength + this.constraints.cuttingLoss;
-      if (bin.remainingLength - actualUsed < this.constraints.backEndLoss + 100) {
-        actualUsed = Math.min(
-          actualUsed + this.constraints.backEndLoss,
-          bin.remainingLength
-        );
-      }
     }
     
     bin.usedLength += actualUsed;
