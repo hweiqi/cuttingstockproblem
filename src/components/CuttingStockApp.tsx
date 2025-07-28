@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { MaterialService } from '../services/MaterialService';
 import { PartService } from '../services/PartService';
 import { V6CuttingService } from '../services/V6CuttingService';
-import { STANDARD_MATERIAL_LENGTHS } from '../config/MaterialConfig';
 import { MaterialInput } from './MaterialInput';
 import { PartInput } from './PartInput';
 import { CuttingResult } from './CuttingResult';
@@ -24,6 +23,16 @@ export const CuttingStockApp: React.FC = () => {
   const handleAddMaterial = (length: number) => {
     try {
       const material = materialService.addMaterial(length);
+      setMaterials([...materials, material]);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '新增母材時發生錯誤');
+    }
+  };
+
+  const handleAddMaterialWithQuantity = (length: number, quantity: number) => {
+    try {
+      const material = materialService.addMaterialWithQuantity(length, quantity);
       setMaterials([...materials, material]);
       setError('');
     } catch (err) {
@@ -168,6 +177,7 @@ export const CuttingStockApp: React.FC = () => {
           <MaterialInput
             materials={materials}
             onAddMaterial={handleAddMaterial}
+            onAddMaterialWithQuantity={handleAddMaterialWithQuantity}
             onRemoveMaterial={handleRemoveMaterial}
           />
           

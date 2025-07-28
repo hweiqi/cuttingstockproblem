@@ -68,7 +68,7 @@ export class V6CuttingService {
     const v6Materials: V6Material[] = materials.map(mat => ({
       id: mat.id,
       length: mat.length,
-      quantity: mat.quantity || 1
+      quantity: mat.quantity !== undefined ? mat.quantity : 1
     }));
 
     // 執行優化
@@ -219,7 +219,7 @@ export class V6CuttingService {
     const v6Materials: V6Material[] = materials.map(mat => ({
       id: mat.id,
       length: mat.length,
-      quantity: mat.quantity || 1
+      quantity: mat.quantity !== undefined ? mat.quantity : 1
     }));
 
     const result = this.v6System.optimize(v6Parts, v6Materials);

@@ -12,7 +12,26 @@ export class MaterialService {
 
   addMaterial(length: number): Material {
     const id = this.generateId();
-    const material: Material = { id, length };
+    // 預設為無限供應（quantity: 0）
+    const material: Material = { id, length, quantity: 0 };
+    
+    // 驗證是否可以添加到現有列表（包括重複長度檢查）
+    const validationResult = this.validator.canAddToList(material, this.getAllMaterials());
+    if (!validationResult.isValid) {
+      throw new Error(validationResult.error);
+    }
+    
+    this.materials.set(id, material);
+    return material;
+  }
+
+  addMaterialWithQuantity(length: number, quantity: number): Material {
+    if (quantity < 0) {
+      throw new Error('材料數量不能為負數');
+    }
+    
+    const id = this.generateId();
+    const material: Material = { id, length, quantity };
     
     // 驗證是否可以添加到現有列表（包括重複長度檢查）
     const validationResult = this.validator.canAddToList(material, this.getAllMaterials());
@@ -60,6 +79,20 @@ export class MaterialService {
     }
     
     material.length = newLength;
+    return material;
+  }
+
+  updateMaterialQuantity(id: string, newQuantity: number): Material | undefined {
+    if (newQuantity < 0) {
+      throw new Error('材料數量不能為負數');
+    }
+
+    const material = this.materials.get(id);
+    if (!material) {
+      return undefined;
+    }
+
+    material.quantity = newQuantity;
     return material;
   }
 

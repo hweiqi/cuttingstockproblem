@@ -2,7 +2,6 @@ import { PartWithQuantity, Part, PartInstance, AnglePositionType } from '../mode
 import { SharedCutChain, ChainPart, ChainConnection, ChainBuildReport, determineChainStructure } from '../models/Chain';
 import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
 import { AngleMatch } from '../models/SharedCut';
-import { STANDARD_MATERIAL_LENGTHS } from '../../../config/MaterialConfig';
 
 interface ChainBuildResult {
   chains: SharedCutChain[];
@@ -17,7 +16,7 @@ export class DynamicChainBuilder {
   private matcher: FlexibleAngleMatcher;
   private chainIdCounter = 0;
   private readonly MAX_CHAIN_SIZE = 50; // 單個鏈的最大零件數
-  private readonly MAX_CHAIN_LENGTH = Math.max(...STANDARD_MATERIAL_LENGTHS) - 50; // 最大鏈長度，預留50mm餘量
+  private readonly MAX_CHAIN_LENGTH = 15000 - 50; // 最大鏈長度，預留50mm餘量
 
   constructor(angleTolerance?: number) {
     this.matcher = new FlexibleAngleMatcher(angleTolerance);

@@ -2,7 +2,7 @@ import { PartWithQuantity } from '../models/Part';
 import { Material, PlacementResult } from '../models/Material';
 import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
 import { DynamicChainBuilder } from '../optimization/DynamicChainBuilder';
-import { OptimizedPlacer } from '../../../placement/OptimizedPlacer';
+import { OptimizedPlacerV2 } from '../../../placement/OptimizedPlacerV2';
 
 /**
  * V6系統結果
@@ -47,7 +47,7 @@ export interface V6SystemConfig {
 export class V6System {
   private matcher: FlexibleAngleMatcher;
   private chainBuilder: DynamicChainBuilder;
-  private placer: OptimizedPlacer;
+  private placer: OptimizedPlacerV2;
   private config: V6SystemConfig;
 
   constructor(config?: V6SystemConfig) {
@@ -62,7 +62,7 @@ export class V6System {
     this.chainBuilder = new DynamicChainBuilder(this.config.angleTolerance);
     
     // 使用優化排版器
-    this.placer = new OptimizedPlacer(this.config.constraints);
+    this.placer = new OptimizedPlacerV2(this.config.constraints);
   }
 
   /**
@@ -151,7 +151,7 @@ export class V6System {
     }
     
     if (config.constraints !== undefined) {
-      this.placer = new OptimizedPlacer(config.constraints);
+      this.placer = new OptimizedPlacerV2(config.constraints);
     }
   }
 

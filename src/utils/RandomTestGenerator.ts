@@ -1,7 +1,6 @@
 import { Material, Part, PartAngles } from '../types';
 import { AngleValidator } from '../validators/AngleValidator';
 import { MaterialValidator } from '../validators/MaterialValidator';
-import { STANDARD_MATERIAL_LENGTHS } from '../config/MaterialConfig';
 
 export interface TestScenario {
   materials: Material[];
@@ -40,7 +39,7 @@ export class RandomTestGenerator {
     if (count <= 0) return [];
 
     const materials: Material[] = [];
-    const availableLengths = [...STANDARD_MATERIAL_LENGTHS];
+    const availableLengths = [6000, 9000, 10000, 12000, 15000];
     const usedLengths = new Set<number>();
     
     if (lengthRange) {
@@ -66,7 +65,8 @@ export class RandomTestGenerator {
         
         materials.push({
           id: `M${i + 1}-${Date.now()}-${i}`,
-          length: length
+          length: length,
+          quantity: 0 // 預設無限供應
         });
       }
     } else {
@@ -84,7 +84,8 @@ export class RandomTestGenerator {
         
         materials.push({
           id: `M${i + 1}-${Date.now()}-${i}`,
-          length: length
+          length: length,
+          quantity: 0 // 預設無限供應
         });
       }
     }
@@ -185,7 +186,8 @@ export class RandomTestGenerator {
         for (let i = 0; i < additionalMaterialsNeeded; i++) {
           materials.push({
             id: `M${materials.length + 1}-${Date.now()}-extra-${i}`,
-            length: mergedConfig.materialLength.max
+            length: mergedConfig.materialLength.max,
+            quantity: 0 // 預設無限供應
           });
         }
       }
@@ -206,9 +208,9 @@ export class RandomTestGenerator {
       description: '少量材料和零件，無角度',
       scenario: {
         materials: [
-          { id: 'M1-simple', length: 6000 },
-          { id: 'M2-simple', length: 9000 },
-          { id: 'M3-simple', length: 12000 }
+          { id: 'M1-simple', length: 6000, quantity: 0 },
+          { id: 'M2-simple', length: 9000, quantity: 0 },
+          { id: 'M3-simple', length: 12000, quantity: 0 }
         ],
         parts: [
           { id: 'P1-simple', length: 2000, quantity: 3 },
@@ -225,10 +227,10 @@ export class RandomTestGenerator {
       description: '包含多種角度配置，測試共刀優化',
       scenario: {
         materials: [
-          { id: 'M1-complex', length: 6000 },
-          { id: 'M2-complex', length: 9000 },
-          { id: 'M3-complex', length: 12000 },
-          { id: 'M4-complex', length: 10000 } // 使用標準長度
+          { id: 'M1-complex', length: 6000, quantity: 0 },
+          { id: 'M2-complex', length: 9000, quantity: 0 },
+          { id: 'M3-complex', length: 12000, quantity: 0 },
+          { id: 'M4-complex', length: 10000, quantity: 0 }
         ],
         parts: [
           { 

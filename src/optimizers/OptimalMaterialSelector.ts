@@ -1,10 +1,5 @@
 import { Part } from '../types';
-import { 
-  STANDARD_MATERIAL_LENGTHS, 
-  StandardMaterialLength,
-  selectOptimalMaterialLength,
-  calculateMaterialUtilization 
-} from '../config/MaterialConfig';
+import { calculateMaterialUtilization } from '../config/MaterialConfigV2';
 
 export interface EndLosses {
   front: number;
@@ -31,10 +26,10 @@ export interface OptimalLayout {
 }
 
 export interface MaterialSuggestion {
-  recommendedLength: StandardMaterialLength;
+  recommendedLength: number;
   expectedUtilization: number;
   alternativeOptions: Array<{
-    length: StandardMaterialLength;
+    length: number;
     utilization: number;
     waste: number;
   }>;
@@ -52,10 +47,11 @@ export class OptimalMaterialSelector {
     parts: Part[],
     cuttingLoss: number,
     endLosses: EndLosses,
-    enableSharedCutting: boolean = false
-  ): StandardMaterialLength {
+    enableSharedCutting: boolean = false,
+    availableMaterials: number[] = []
+  ): number {
     if (parts.length === 0 || parts.every(p => p.quantity === 0)) {
-      return STANDARD_MATERIAL_LENGTHS[0];
+      return availableMaterials.length > 0 ? availableMaterials[0] : 6000;
     }
 
     // 計算總零件長度以估算需求
@@ -73,10 +69,11 @@ export class OptimalMaterialSelector {
       endLosses.front + endLosses.back;
 
     // 找最佳材料
-    let bestMaterial: StandardMaterialLength = STANDARD_MATERIAL_LENGTHS[0];
+    let bestMaterial: number = availableMaterials.length > 0 ? availableMaterials[0] : 6000;
     let bestScore = -Infinity;
 
-    for (const materialLength of STANDARD_MATERIAL_LENGTHS) {
+    const materialsToEvaluate = availableMaterials.length > 0 ? availableMaterials : [6000, 9000, 10000, 12000, 15000];
+    for (const materialLength of materialsToEvaluate) {
       const layout = this.calculateOptimalLayout(
         parts, 
         materialLength, 
@@ -102,7 +99,7 @@ export class OptimalMaterialSelector {
         // 如果是因為零件太長而放不下，需要選擇更大的材料
         const hasLongParts = parts.some(p => p.length + endLosses.front + endLosses.back > materialLength);
         
-        if (hasLongParts && materialLength < STANDARD_MATERIAL_LENGTHS[STANDARD_MATERIAL_LENGTHS.length - 1]) {
+        if (hasLongParts && materialLength < Math.max(...materialsToEvaluate)) {
           score = -1000; // 懲罰太短的材料
         } else {
           score = placementRatio * 100 + layout.utilization * 10;
@@ -229,13 +226,15 @@ export class OptimalMaterialSelector {
     parts: Part[],
     cuttingLoss: number,
     endLosses: EndLosses,
-    targetUtilization: number = 0.85
+    targetUtilization: number = 0.85,
+    availableMaterials: number[] = []
   ): MaterialSuggestion {
     const alternativeOptions: MaterialSuggestion['alternativeOptions'] = [];
     const warnings: string[] = [];
     
-    // 評估所有標準材料
-    for (const materialLength of STANDARD_MATERIAL_LENGTHS) {
+    // 評估所有材料
+    const materialsToEvaluate = availableMaterials.length > 0 ? availableMaterials : [6000, 9000, 10000, 12000, 15000];
+    for (const materialLength of materialsToEvaluate) {
       const layout = this.calculateOptimalLayout(
         parts,
         materialLength,
