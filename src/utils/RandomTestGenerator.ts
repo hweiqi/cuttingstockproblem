@@ -39,55 +39,71 @@ export class RandomTestGenerator {
     if (count <= 0) return [];
 
     const materials: Material[] = [];
-    const availableLengths = [6000, 9000, 10000, 12000, 15000];
+    const baseTime = Date.now();
+    const standardLengths = [6000, 9000, 10000, 12000, 15000];
     const usedLengths = new Set<number>();
     
+    // 如果需要的材料數量超過標準長度數，則生成額外的長度
+    let availableLengths: number[] = [...standardLengths];
+    
     if (lengthRange) {
-      // 如果有自定義範圍，過濾標準長度
-      const filteredLengths = availableLengths.filter(
+      // 過濾符合範圍的長度
+      availableLengths = availableLengths.filter(
         length => length >= lengthRange.min && length <= lengthRange.max
       );
       
-      // 如果過濾後沒有符合的標準長度，使用所有標準長度
-      const lengthsToUse = filteredLengths.length > 0 ? filteredLengths : availableLengths;
+      // 如果需要更多材料，生成額外的長度
+      // 按照100mm的步長生成所有可能的長度
+      for (let length = lengthRange.min; length <= lengthRange.max && availableLengths.length < count; length += 100) {
+        if (!availableLengths.includes(length)) {
+          availableLengths.push(length);
+        }
+      }
       
-      // 限制數量不超過可用長度數
-      const actualCount = Math.min(count, lengthsToUse.length);
+      // 如果還需要更多，使用50mm步長
+      if (availableLengths.length < count) {
+        for (let length = lengthRange.min + 50; length <= lengthRange.max && availableLengths.length < count; length += 100) {
+          if (!availableLengths.includes(length)) {
+            availableLengths.push(length);
+          }
+        }
+      }
       
-      for (let i = 0; i < actualCount; i++) {
-        // 從可用的標準長度中隨機選擇一個未使用的
-        const availableForSelection = lengthsToUse.filter(len => !usedLengths.has(len));
-        if (availableForSelection.length === 0) break;
-        
-        const randomIndex = this.random(0, availableForSelection.length - 1);
-        const length = availableForSelection[randomIndex];
-        usedLengths.add(length);
-        
-        materials.push({
-          id: `M${i + 1}-${Date.now()}-${i}`,
-          length: length,
-          quantity: 0 // 預設無限供應
-        });
+      // 如果還需要更多，使用25mm步長
+      if (availableLengths.length < count) {
+        for (let length = lengthRange.min + 25; length <= lengthRange.max && availableLengths.length < count; length += 50) {
+          if (!availableLengths.includes(length)) {
+            availableLengths.push(length);
+          }
+        }
       }
     } else {
-      // 使用所有標準長度，確保不重複
-      const actualCount = Math.min(count, availableLengths.length);
-      
-      for (let i = 0; i < actualCount; i++) {
-        // 從可用的標準長度中隨機選擇一個未使用的
-        const availableForSelection = availableLengths.filter(len => !usedLengths.has(len));
-        if (availableForSelection.length === 0) break;
-        
-        const randomIndex = this.random(0, availableForSelection.length - 1);
-        const length = availableForSelection[randomIndex];
-        usedLengths.add(length);
-        
-        materials.push({
-          id: `M${i + 1}-${Date.now()}-${i}`,
-          length: length,
-          quantity: 0 // 預設無限供應
-        });
+      // 如果沒有指定範圍，生成標準長度的變體
+      // 先添加每個標準長度的變體
+      for (const baseLength of standardLengths) {
+        for (let variation = -1000; variation <= 1000 && availableLengths.length < count; variation += 100) {
+          const newLength = baseLength + variation;
+          if (newLength > 0 && !availableLengths.includes(newLength)) {
+            availableLengths.push(newLength);
+          }
+        }
       }
+    }
+    
+    // 生成指定數量的材料
+    for (let i = 0; i < count && i < availableLengths.length; i++) {
+      // 從可用長度中隨機選擇一個未使用的
+      const availableForSelection = availableLengths.filter(len => !usedLengths.has(len));
+      if (availableForSelection.length === 0) break;
+      
+      const randomIndex = this.random(0, availableForSelection.length - 1);
+      const length = availableForSelection[randomIndex];
+      usedLengths.add(length);
+      
+      materials.push({
+        id: `M${i + 1}-${baseTime}-${i}`,
+        length: length
+      });
     }
     
     return materials;
@@ -96,19 +112,79 @@ export class RandomTestGenerator {
   /**
    * 生成隨機零件
    */
-  generateRandomParts(count: number): Part[] {
+  generateRandomParts(count: number, lengthRange?: { min: number; max: number }): Part[] {
     if (count <= 0) return [];
 
     const parts: Part[] = [];
+    const baseTime = Date.now();
     
-    for (let i = 0; i < count; i++) {
+    // 為了提升大規模生成效能，採用批次生成
+    const batchSize = 1000;
+    const batches = Math.ceil(count / batchSize);
+    
+    for (let batch = 0; batch < batches; batch++) {
+      const startIdx = batch * batchSize;
+      const endIdx = Math.min(startIdx + batchSize, count);
+      
+      for (let i = startIdx; i < endIdx; i++) {
+        const hasAngles = this.random(0, 100) < 40; // 40% 機率有角度
+        // 使用提供的長度範圍或默認值
+        const minLength = lengthRange?.min || 500;
+        const maxLength = lengthRange?.max || 5000;
+        const length = Math.round(this.random(minLength / 10, maxLength / 10)) * 10; // 10的倍數
+        
+        const part: Part = {
+          id: `P${i + 1}-${baseTime}-${i}`,
+          length: length,
+          quantity: this.random(1, 10)
+        };
+
+        if (hasAngles) {
+          part.angles = this.generateRandomAngles();
+        }
+
+        parts.push(part);
+      }
+      
+      // 每批次後稍微變更種子，避免重複
+      if (batch % 10 === 0) {
+        this.seed = (this.seed + batch) % 2147483647;
+      }
+    }
+
+    return parts;
+  }
+
+  /**
+   * 生成固定實例數量的隨機零件（用於精確測試）
+   */
+  generateRandomPartsWithFixedInstances(totalInstances: number, lengthRange?: { min: number; max: number }): Part[] {
+    if (totalInstances <= 0) return [];
+
+    const parts: Part[] = [];
+    const baseTime = Date.now();
+    const partTypes = Math.min(totalInstances, Math.ceil(totalInstances / 5)); // 每種零件平均5個實例
+    
+    const minLength = lengthRange?.min || 500;
+    const maxLength = lengthRange?.max || 5000;
+    
+    let remainingInstances = totalInstances;
+    
+    for (let i = 0; i < partTypes && remainingInstances > 0; i++) {
       const hasAngles = this.random(0, 100) < 40; // 40% 機率有角度
-      const length = Math.round(this.random(50, 500)) * 10; // 500-5000, 10的倍數
+      const length = Math.round(this.random(minLength / 10, maxLength / 10)) * 10; // 10的倍數
+      
+      // 計算這個零件的數量
+      const isLastPart = i === partTypes - 1;
+      const maxQuantity = Math.min(10, Math.ceil(remainingInstances / (partTypes - i)));
+      const quantity = isLastPart 
+        ? remainingInstances 
+        : Math.min(remainingInstances, this.random(1, maxQuantity));
       
       const part: Part = {
-        id: `P${i + 1}-${Date.now()}-${i}`,
+        id: `P${i + 1}-${baseTime}-${i}`,
         length: length,
-        quantity: this.random(1, 10)
+        quantity: quantity
       };
 
       if (hasAngles) {
@@ -116,6 +192,12 @@ export class RandomTestGenerator {
       }
 
       parts.push(part);
+      remainingInstances -= quantity;
+      
+      // 定期更新種子以增加隨機性
+      if (i % 100 === 0) {
+        this.seed = (this.seed + i) % 2147483647;
+      }
     }
 
     return parts;
@@ -129,75 +211,9 @@ export class RandomTestGenerator {
     return this.angleValidator.generateValidAngles();
   }
 
-  /**
-   * 生成測試場景
-   */
-  generateTestScenario(config?: TestScenarioConfig): TestScenario {
-    const defaultConfig: Required<TestScenarioConfig> = {
-      materialCount: { min: 3, max: 8 },
-      partCount: { min: 5, max: 15 },
-      materialLength: { min: 3000, max: 12000 },
-      partLength: { min: 500, max: 5000 }
-    };
-
-    const mergedConfig = this.mergeConfig(defaultConfig, config);
-    
-    // 生成材料和零件數量
-    const materialCount = this.random(
-      mergedConfig.materialCount.min,
-      mergedConfig.materialCount.max
-    );
-    const partCount = this.random(
-      mergedConfig.partCount.min,
-      mergedConfig.partCount.max
-    );
-
-    // 生成材料（使用配置的長度範圍）
-    const materials = this.generateRandomMaterials(materialCount, mergedConfig.materialLength);
-
-    // 生成零件，確保長度合理
-    const parts = this.generateRandomParts(partCount);
-    
-    // 調整零件長度以符合材料範圍和配置
-    const maxMaterialLength = Math.max(...materials.map(m => m.length));
-    parts.forEach(part => {
-      // 確保零件長度在配置範圍內
-      if (part.length < mergedConfig.partLength.min) {
-        part.length = mergedConfig.partLength.min;
-      }
-      if (part.length > mergedConfig.partLength.max) {
-        part.length = mergedConfig.partLength.max;
-      }
-      // 確保零件長度不超過最大材料長度
-      if (part.length > maxMaterialLength) {
-        part.length = Math.floor(maxMaterialLength * 0.8 / 10) * 10;
-      }
-    });
-
-    // 如果不是自定義配置，才進行平衡調整
-    if (!config) {
-      // 平衡材料和零件總長度
-      const totalPartLength = parts.reduce((sum, p) => sum + p.length * p.quantity, 0);
-      const totalMaterialLength = materials.reduce((sum, m) => sum + m.length, 0);
-      
-      // 如果材料不足，增加材料
-      if (totalMaterialLength < totalPartLength * 0.7) {
-        const additionalMaterialsNeeded = Math.ceil((totalPartLength * 0.8 - totalMaterialLength) / mergedConfig.materialLength.max);
-        for (let i = 0; i < additionalMaterialsNeeded; i++) {
-          materials.push({
-            id: `M${materials.length + 1}-${Date.now()}-extra-${i}`,
-            length: mergedConfig.materialLength.max,
-            quantity: 0 // 預設無限供應
-          });
-        }
-      }
-    }
-
-    return { materials, parts };
-  }
 
   /**
-   * 生成預設測試場景
+   * 生成預設測試場景（只包含零件，不包含母材）
    */
   generatePresetScenarios(): PresetScenario[] {
     const scenarios: PresetScenario[] = [];
@@ -205,13 +221,9 @@ export class RandomTestGenerator {
     // 簡單場景
     scenarios.push({
       name: '簡單場景',
-      description: '少量材料和零件，無角度',
+      description: '少量零件，無角度',
       scenario: {
-        materials: [
-          { id: 'M1-simple', length: 6000, quantity: 0 },
-          { id: 'M2-simple', length: 9000, quantity: 0 },
-          { id: 'M3-simple', length: 12000, quantity: 0 }
-        ],
+        materials: [], // 不提供母材
         parts: [
           { id: 'P1-simple', length: 2000, quantity: 3 },
           { id: 'P2-simple', length: 3000, quantity: 2 },
@@ -226,12 +238,7 @@ export class RandomTestGenerator {
       name: '複雜角度場景',
       description: '包含多種角度配置，測試共刀優化',
       scenario: {
-        materials: [
-          { id: 'M1-complex', length: 6000, quantity: 0 },
-          { id: 'M2-complex', length: 9000, quantity: 0 },
-          { id: 'M3-complex', length: 12000, quantity: 0 },
-          { id: 'M4-complex', length: 10000, quantity: 0 }
-        ],
+        materials: [], // 不提供母材
         parts: [
           { 
             id: 'P1-complex', 
@@ -274,14 +281,13 @@ export class RandomTestGenerator {
     });
 
     // 大規模場景
-    const largeMaterials = this.generateRandomMaterials(15);
     const largeParts = this.generateRandomParts(30);
     
     scenarios.push({
       name: '大規模場景',
-      description: '大量材料和零件，測試性能',
+      description: '大量零件，測試性能',
       scenario: {
-        materials: largeMaterials,
+        materials: [], // 不提供母材
         parts: largeParts
       }
     });
@@ -297,6 +303,33 @@ export class RandomTestGenerator {
     });
 
     return scenarios;
+  }
+
+  /**
+   * 生成測試場景
+   */
+  generateTestScenario(config?: TestScenarioConfig): TestScenario {
+    const defaultConfig: Required<TestScenarioConfig> = {
+      materialCount: { min: 3, max: 5 },
+      partCount: { min: 5, max: 15 },
+      materialLength: { min: 6000, max: 15000 },
+      partLength: { min: 500, max: 5000 }
+    };
+
+    const mergedConfig = this.mergeConfig(defaultConfig, config);
+    
+    // 生成材料
+    const materialCount = this.random(mergedConfig.materialCount.min, mergedConfig.materialCount.max);
+    const materials = this.generateRandomMaterials(materialCount, mergedConfig.materialLength);
+    
+    // 生成零件
+    const partCount = this.random(mergedConfig.partCount.min, mergedConfig.partCount.max);
+    const parts = this.generateRandomParts(partCount, mergedConfig.partLength);
+    
+    return {
+      materials,
+      parts
+    };
   }
 
   /**

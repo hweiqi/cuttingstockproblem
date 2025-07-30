@@ -59,7 +59,7 @@ describe('AngleValidator', () => {
   });
 
   describe('validatePartAngles', () => {
-    it('應該接受所有角度都是0度（無斜切）', () => {
+    it('應該拒絕所有角度都是0度（全部為0不允許）', () => {
       const angles: PartAngles = {
         topLeft: 0,
         topRight: 0,
@@ -67,8 +67,8 @@ describe('AngleValidator', () => {
         bottomRight: 0
       };
       const result = validator.validatePartAngles(angles);
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('所有角度不能全部為0');
     });
 
     it('應該接受有效的單側斜切', () => {

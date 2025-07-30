@@ -65,6 +65,12 @@ export class AngleValidator {
       }
     }
 
+    // 檢查是否所有角度都為0
+    if (angles.topLeft === 0 && angles.topRight === 0 && 
+        angles.bottomLeft === 0 && angles.bottomRight === 0) {
+      errors.push('所有角度不能全部為0');
+    }
+
     // 檢查左側是否同時有上下角度（0度表示無角度）
     if (angles.topLeft > 0 && angles.bottomLeft > 0) {
       errors.push('左側不能同時有上下斜切角度');
@@ -139,10 +145,8 @@ export class AngleValidator {
    * 生成有效的隨機角度組合
    */
   generateValidAngles(): PartAngles {
-    const angleOptions = [0, 30, 45, 60, 75]; // 0表示無角度
+    const angleOptions = [30, 45, 60, 75]; // 移除0，確保不會生成全部為0的組合
     const patterns = [
-      // 無斜切
-      { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 },
       // 單邊斜切
       { topLeft: 45, topRight: 0, bottomLeft: 0, bottomRight: 0 },
       { topLeft: 0, topRight: 45, bottomLeft: 0, bottomRight: 0 },

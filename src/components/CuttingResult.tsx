@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CuttingResult as CuttingResultType } from '../types';
+import { PaginationConfig } from '../types/pagination';
+import { PaginationService } from '../utils/PaginationService';
+import { Pagination } from './Pagination';
 
 interface CuttingResultProps {
   result: CuttingResultType | null;
@@ -17,6 +20,15 @@ const formatAngles = (angles: any): string => {
 };
 
 export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLoss = 3 }) => {
+  // 分頁狀態
+  const [paginationConfig, setPaginationConfig] = useState<PaginationConfig>({
+    currentPage: 1,
+    itemsPerPage: 10
+  });
+
+  // 分頁服務
+  const paginationService = new PaginationService();
+
   if (!result) {
     return null;
   }
@@ -32,11 +44,11 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
         </div>
         <div className="summary-item">
           <span className="label">總體使用效率:</span>
-          <span className="value">{result.overallEfficiency.toFixed(2)}%</span>
+          <span className="value">{(result.overallEfficiency ?? 0).toFixed(2)}%</span>
         </div>
         <div className="summary-item">
           <span className="label">總餘料長度:</span>
-          <span className="value">{result.totalWaste.toFixed(2)} mm</span>
+          <span className="value">{(result.totalWaste ?? 0).toFixed(2)} mm</span>
         </div>
         <div className="summary-item">
           <span className="label">排版耗時:</span>
@@ -69,7 +81,7 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
               </div>
               <div className="summary-item">
                 <span className="label">總節省材料:</span>
-                <span className="value highlight">{result.sharedCutSummary.totalSavings.toFixed(2)} mm</span>
+                <span className="value highlight">{(result.sharedCutSummary.totalSavings ?? 0).toFixed(2)} mm</span>
               </div>
               <div className="shared-pairs">
                 <h4>共刀配對詳情:</h4>
@@ -80,7 +92,7 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                       <span>零件: {pair.part1Id} + {pair.part2Id}</span>
                       <span>匹配角度: {formatAngle(pair.matchedAngle)}</span>
                       <span>數量: {pair.quantity} 對</span>
-                      <span className="savings">節省: {pair.savings.toFixed(2)} mm/對</span>
+                      <span className="savings">節省: {(pair.savings ?? 0).toFixed(2)} mm/對</span>
                       {pair.requiresFlip && <span>需要翻轉: {pair.flipDirection}</span>}
                     </div>
                   </div>
@@ -106,9 +118,26 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
 
       <div className="cut-plans">
         <h3>詳細排版方案</h3>
-        {result.cutPlans.map((plan, index) => (
-          <div key={index} className="cut-plan">
-            <h4>母材 #{index + 1} (長度: {plan.materialLength} mm) {plan.isVirtual && '(虛擬材料)'}</h4>
+        {(() => {
+          // 確保 cutPlans 存在且為陣列
+          const cutPlans = result.cutPlans || [];
+          
+          if (cutPlans.length === 0) {
+            return (
+              <div className="no-plans">
+                <p>沒有生成任何排版方案</p>
+              </div>
+            );
+          }
+          
+          const paginatedResult = paginationService.paginate(cutPlans, paginationConfig);
+          const startIndex = paginatedResult.pagination.startIndex;
+          
+          return (
+            <>
+              {paginatedResult.items.map((plan: any, index: number) => (
+                <div key={startIndex + index} className="cut-plan">
+                  <h4>母材 #{startIndex + index + 1} (長度: {plan.materialLength} mm) {plan.isVirtual && '(虛擬材料)'}</h4>
             
             {plan.sharedCutPairs && plan.sharedCutPairs.length > 0 && (
               <div className="plan-shared-info">
@@ -145,7 +174,7 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                             {(part as any).angleSavings && (
                               <div className="savings">
                                 <span className="savings-icon">💰</span>
-                                本次共刀節省: {(part as any).angleSavings.toFixed(2)} mm
+                                本次共刀節省: {((part as any).angleSavings ?? 0).toFixed(2)} mm
                               </div>
                             )}
                             {(part as any).part1Angles && (
@@ -188,7 +217,7 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                             {(part as any).angleSavings && (
                               <div className="shared-cut-details">
                                 <div className="saving-amount">
-                                  節省材料: {(part as any).angleSavings.toFixed(2)} mm
+                                  節省材料: {((part as any).angleSavings ?? 0).toFixed(2)} mm
                                 </div>
                                 <div className="cutting-note">
                                   (共刀切割正常損耗: {cuttingLoss} mm)
@@ -207,12 +236,25 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
                 ))}
               </div>
               <div className="plan-summary">
-                <span>餘料: {(plan.waste || plan.wasteLength || 0).toFixed(2)} mm</span>
-                <span>效率: {(plan.utilization ? plan.utilization * 100 : plan.efficiency).toFixed(2)}%</span>
+                <span>餘料: {(plan.waste ?? plan.wasteLength ?? 0).toFixed(2)} mm</span>
+                <span>效率: {((plan.utilization ? plan.utilization * 100 : plan.efficiency) ?? 0).toFixed(2)}%</span>
               </div>
             </div>
-          </div>
-        ))}
+                </div>
+              ))}
+              
+              {/* 分頁控制 */}
+              {cutPlans.length > paginationConfig.itemsPerPage && (
+                <Pagination
+                  paginationInfo={paginatedResult.pagination}
+                  onPageChange={(page) => setPaginationConfig({ ...paginationConfig, currentPage: page })}
+                  onItemsPerPageChange={(itemsPerPage) => setPaginationConfig({ currentPage: 1, itemsPerPage })}
+                  showItemsPerPageSelector={true}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <style jsx>{`
@@ -313,6 +355,15 @@ export const CuttingResult: React.FC<CuttingResultProps> = ({ result, cuttingLos
 
         .cut-plans {
           margin-top: 30px;
+        }
+
+        .no-plans {
+          padding: 40px;
+          text-align: center;
+          color: #666;
+          font-style: italic;
+          background-color: #f5f5f5;
+          border-radius: 8px;
         }
 
         .cut-plan {

@@ -1,8 +1,8 @@
 import { PartWithQuantity } from '../models/Part';
 import { Material, PlacementResult } from '../models/Material';
-import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
-import { DynamicChainBuilder } from '../optimization/DynamicChainBuilder';
-import { OptimizedPlacerV2 } from '../../../placement/OptimizedPlacerV2';
+import { OptimizedFlexibleAngleMatcher } from '../matching/OptimizedFlexibleAngleMatcher';
+import { OptimizedChainBuilder } from '../optimization/OptimizedChainBuilder';
+import { OptimizedPlacerV4 } from '../../../placement/OptimizedPlacerV4';
 
 /**
  * V6系統結果
@@ -45,9 +45,9 @@ export interface V6SystemConfig {
  * 3. 優化排版邏輯以減少材料使用
  */
 export class V6System {
-  private matcher: FlexibleAngleMatcher;
-  private chainBuilder: DynamicChainBuilder;
-  private placer: OptimizedPlacerV2;
+  private matcher: OptimizedFlexibleAngleMatcher;
+  private chainBuilder: OptimizedChainBuilder;
+  private placer: OptimizedPlacerV4;
   private config: V6SystemConfig;
 
   constructor(config?: V6SystemConfig) {
@@ -58,21 +58,21 @@ export class V6System {
       ...config
     };
 
-    this.matcher = new FlexibleAngleMatcher(this.config.angleTolerance);
-    this.chainBuilder = new DynamicChainBuilder(this.config.angleTolerance);
+    this.matcher = new OptimizedFlexibleAngleMatcher(this.config.angleTolerance);
+    this.chainBuilder = new OptimizedChainBuilder(this.config.angleTolerance);
     
-    // 使用優化排版器
-    this.placer = new OptimizedPlacerV2(this.config.constraints);
+    // 使用優化排版器 V4
+    this.placer = new OptimizedPlacerV4(this.config.constraints);
   }
 
   /**
    * 執行完整的切割優化
    */
   optimize(parts: PartWithQuantity[], materials: Material[]): V6SystemResult {
-    const totalStartTime = performance.now();
+    const totalStartTime = Date.now();
     
     // 步驟1：分析零件的共刀潛力
-    const matchingStartTime = performance.now();
+    const matchingStartTime = Date.now();
     const sharedCuttingPotential = this.matcher.evaluateSharedCuttingPotential(
       parts.map(p => ({
         id: p.id,
@@ -81,23 +81,23 @@ export class V6System {
         thickness: p.thickness
       }))
     );
-    const matchingTime = performance.now() - matchingStartTime;
+    const matchingTime = Date.now() - matchingStartTime;
     
     // 步驟2：構建共刀鏈
-    const chainBuildingStartTime = performance.now();
+    const chainBuildingStartTime = Date.now();
     const chainResult = this.chainBuilder.buildChainsWithReport(parts);
-    const chainBuildingTime = performance.now() - chainBuildingStartTime;
+    const chainBuildingTime = Date.now() - chainBuildingStartTime;
     
     // 步驟3：執行排版
-    const placementStartTime = performance.now();
+    const placementStartTime = Date.now();
     const placementResult = this.placer.placePartsWithChains(
       parts,
       materials,
       chainResult.chains
     );
-    const placementTime = performance.now() - placementStartTime;
+    const placementTime = Date.now() - placementStartTime;
     
-    const totalTime = performance.now() - totalStartTime;
+    const totalTime = Date.now() - totalStartTime;
     
     // 統計混合鏈數量
     const mixedChainsCreated = chainResult.chains.filter(
@@ -146,12 +146,12 @@ export class V6System {
     
     // 重新創建組件
     if (config.angleTolerance !== undefined) {
-      this.matcher = new FlexibleAngleMatcher(config.angleTolerance);
-      this.chainBuilder = new DynamicChainBuilder(config.angleTolerance);
+      this.matcher = new OptimizedFlexibleAngleMatcher(config.angleTolerance);
+      this.chainBuilder = new OptimizedChainBuilder(config.angleTolerance);
     }
     
     if (config.constraints !== undefined) {
-      this.placer = new OptimizedPlacerV2(config.constraints);
+      this.placer = new OptimizedPlacerV4(config.constraints);
     }
   }
 

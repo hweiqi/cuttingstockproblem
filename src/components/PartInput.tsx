@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Part, PartAngles } from '../types';
+import { PaginationConfig } from '../types/pagination';
+import { PaginationService } from '../utils/PaginationService';
+import { Pagination } from './Pagination';
 
 interface PartInputProps {
   parts: Part[];
@@ -22,6 +25,15 @@ export const PartInput: React.FC<PartInputProps> = ({
     bottomLeft: '0',
     bottomRight: '0'
   });
+
+  // 分頁狀態
+  const [paginationConfig, setPaginationConfig] = useState<PaginationConfig>({
+    currentPage: 1,
+    itemsPerPage: 10
+  });
+
+  // 分頁服務
+  const paginationService = new PaginationService<Part>();
 
   const handleAdd = () => {
     const lengthNum = parseInt(length);
@@ -202,27 +214,43 @@ export const PartInput: React.FC<PartInputProps> = ({
         {parts.length === 0 ? (
           <p>尚未設定任何零件</p>
         ) : (
-          <ul>
-            {parts.map((part) => (
-              <li key={part.id} className="part-item">
-                <div>
-                  <span>長度: {part.length} mm × {part.quantity} 支</span>
-                  {part.angles && (
-                    <span className="angle-info">
-                      （角度: 左上{part.angles.topLeft}° 右上{part.angles.topRight}° 
-                      左下{part.angles.bottomLeft}° 右下{part.angles.bottomRight}°）
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => onRemovePart(part.id)}
-                  className="btn btn-danger btn-sm"
-                >
-                  刪除
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* 分頁的零件列表 */}
+            <ul>
+              {(() => {
+                const paginatedResult = paginationService.paginate(parts, paginationConfig);
+                return paginatedResult.items.map((part) => (
+                  <li key={part.id} className="part-item">
+                    <div>
+                      <span>長度: {part.length} mm × {part.quantity} 支</span>
+                      {part.angles && (
+                        <span className="angle-info">
+                          （角度: 左上{part.angles.topLeft}° 右上{part.angles.topRight}° 
+                          左下{part.angles.bottomLeft}° 右下{part.angles.bottomRight}°）
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => onRemovePart(part.id)}
+                      className="btn btn-danger btn-sm"
+                    >
+                      刪除
+                    </button>
+                  </li>
+                ));
+              })()}
+            </ul>
+            
+            {/* 分頁控制 */}
+            {parts.length > paginationConfig.itemsPerPage && (
+              <Pagination
+                paginationInfo={paginationService.paginate(parts, paginationConfig).pagination}
+                onPageChange={(page) => setPaginationConfig({ ...paginationConfig, currentPage: page })}
+                onItemsPerPageChange={(itemsPerPage) => setPaginationConfig({ currentPage: 1, itemsPerPage })}
+                showItemsPerPageSelector={true}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

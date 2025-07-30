@@ -1,23 +1,20 @@
-export interface Material {
-  id: string;
-  length: number;
-  quantity?: number;
-}
-
-export interface PartAngles {
-  topLeft: number;
-  topRight: number;
-  bottomLeft: number;
-  bottomRight: number;
-}
-
-export interface Part {
-  id: string;
-  length: number;
-  quantity: number;
-  angles?: PartAngles;
-  thickness?: number;
-}
+// 重新匯出核心類型
+export type { Material, PartAngles, Part } from './core';
+export type { 
+  CuttingSettings, 
+  SharedCutConnection, 
+  SharedCutChain, 
+  PlacedPart as CorePlacedPart,
+  MaterialUsagePlan,
+  CuttingResult as CoreCuttingResult
+} from './core';
+export { 
+  DEFAULT_CUTTING_SETTINGS,
+  isValidBevelAngle,
+  validatePartAngles,
+  calculateSharedCutSavings,
+  canAnglesMatch
+} from './core';
 
 export interface CutPlan {
   materialId: string;

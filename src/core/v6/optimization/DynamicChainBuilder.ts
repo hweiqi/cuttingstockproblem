@@ -1,6 +1,6 @@
 import { PartWithQuantity, Part, PartInstance, AnglePositionType } from '../models/Part';
 import { SharedCutChain, ChainPart, ChainConnection, ChainBuildReport, determineChainStructure } from '../models/Chain';
-import { FlexibleAngleMatcher } from '../matching/FlexibleAngleMatcher';
+import { OptimizedFlexibleAngleMatcher } from '../matching/OptimizedFlexibleAngleMatcher';
 import { AngleMatch } from '../models/SharedCut';
 
 interface ChainBuildResult {
@@ -13,13 +13,13 @@ interface ChainBuildResult {
  * 能夠構建包含多種零件和角度的複雜共刀鏈
  */
 export class DynamicChainBuilder {
-  private matcher: FlexibleAngleMatcher;
+  private matcher: OptimizedFlexibleAngleMatcher;
   private chainIdCounter = 0;
   private readonly MAX_CHAIN_SIZE = 50; // 單個鏈的最大零件數
   private readonly MAX_CHAIN_LENGTH = 15000 - 50; // 最大鏈長度，預留50mm餘量
 
   constructor(angleTolerance?: number) {
-    this.matcher = new FlexibleAngleMatcher(angleTolerance);
+    this.matcher = new OptimizedFlexibleAngleMatcher(angleTolerance);
   }
 
   /**

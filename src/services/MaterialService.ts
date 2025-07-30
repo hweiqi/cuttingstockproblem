@@ -12,8 +12,7 @@ export class MaterialService {
 
   addMaterial(length: number): Material {
     const id = this.generateId();
-    // 預設為無限供應（quantity: 0）
-    const material: Material = { id, length, quantity: 0 };
+    const material: Material = { id, length };
     
     // 驗證是否可以添加到現有列表（包括重複長度檢查）
     const validationResult = this.validator.canAddToList(material, this.getAllMaterials());

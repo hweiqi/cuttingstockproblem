@@ -1,10 +1,10 @@
 import dynamic from 'next/dynamic';
 
-const CuttingStockApp = dynamic(
-  () => import('../src/components/CuttingStockApp').then(mod => mod.CuttingStockApp),
+const OptimizedCuttingStockApp = dynamic(
+  () => import('../src/components/OptimizedCuttingStockApp').then(mod => mod.OptimizedCuttingStockApp),
   { ssr: false }
 );
 
 export default function Home() {
-  return <CuttingStockApp />;
+  return <OptimizedCuttingStockApp />;
 }

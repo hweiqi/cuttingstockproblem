@@ -1,5 +1,4 @@
 import { Part, PartAngles, FlipDirection, SharedCutMatchInfo } from '../types';
-import { ThicknessCalculator } from '../utils/ThicknessCalculator';
 import { AngleValidator } from '../validators/AngleValidator';
 
 interface PartUpdateOptions {
@@ -29,7 +28,8 @@ export class PartService {
     const id = this.generateId();
     
     // 自動計算厚度
-    const thickness = angles ? ThicknessCalculator.calculateEffectiveThickness(length, angles) : undefined;
+    // 計算預設厚度，根據零件長度估算
+    const thickness = angles ? this.calculateDefaultThickness(length, angles) : 20;
     
     const part: Part = { 
       id, 
@@ -134,6 +134,62 @@ export class PartService {
     if (!validationResult.isValid) {
       throw new Error(`角度驗證失敗: ${validationResult.errors.join('; ')}`);
     }
+  }
+
+  /**
+   * 計算預設厚度，根據零件長度估算
+   */
+  private calculateDefaultThickness(length: number, angles?: PartAngles): number {
+    if (!angles || !this.hasAngledCut(angles)) {
+      return 20; // 無角度零件預設20mm
+    }
+
+    // 根據長度範圍設定基本厚度
+    let baseThickness: number;
+    if (length <= 300) {
+      baseThickness = 10; // 小零件默認10mm
+    } else if (length <= 600) {
+      baseThickness = 15; // 中小零件默認15mm
+    } else if (length <= 1000) {
+      baseThickness = 20; // 中零件默認20mm
+    } else if (length <= 1500) {
+      baseThickness = 25; // 中大零件默認25mm
+    } else {
+      baseThickness = 30; // 大零件默認30mm
+    }
+
+    // 根據斜切角度調整厚度
+    const minAngle = this.getMinAngle(angles);
+    if (minAngle < 30) {
+      baseThickness *= 1.5; // 陡角需要更厚的板材
+    } else if (minAngle < 45) {
+      baseThickness *= 1.2; // 中等角度
+    }
+
+    return Math.round(baseThickness);
+  }
+
+  /**
+   * 檢查零件是否有斜切角度
+   */
+  private hasAngledCut(angles?: PartAngles): boolean {
+    if (!angles) return false;
+    return angles.topLeft > 0 || angles.topRight > 0 || 
+           angles.bottomLeft > 0 || angles.bottomRight > 0;
+  }
+
+  /**
+   * 獲取零件的最小角度（非0度）
+   */
+  private getMinAngle(angles: PartAngles): number {
+    const nonZeroAngles = [
+      angles.topLeft,
+      angles.topRight,
+      angles.bottomLeft,
+      angles.bottomRight
+    ].filter(angle => angle > 0);
+
+    return nonZeroAngles.length > 0 ? Math.min(...nonZeroAngles) : 90;
   }
 
   getFlippedAngles(partId: string, direction: FlipDirection): PartAngles | undefined {

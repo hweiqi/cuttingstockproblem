@@ -3,7 +3,7 @@ import { RandomTestGenerator, PresetScenario } from '../utils/RandomTestGenerato
 import { Material, Part } from '../types';
 
 interface TestScenarioSelectorProps {
-  onApplyScenario: (materials: Material[], parts: Part[]) => void;
+  onApplyScenario: (parts: Part[], materials?: Material[]) => void;
 }
 
 export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onApplyScenario }) => {
@@ -13,24 +13,60 @@ export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onAp
 
   const handleRandomScenario = () => {
     const scenario = generator.generateTestScenario();
-    onApplyScenario(scenario.materials, scenario.parts);
+    onApplyScenario(scenario.parts, scenario.materials);
     setShowSelector(false);
   };
 
   const handlePresetScenario = (preset: PresetScenario) => {
-    onApplyScenario(preset.scenario.materials, preset.scenario.parts);
+    onApplyScenario(preset.scenario.parts, preset.scenario.materials);
     setShowSelector(false);
   };
 
   const handleCustomRandomScenario = () => {
     const config = {
-      materialCount: { min: 5, max: 12 },
       partCount: { min: 10, max: 25 },
-      materialLength: { min: 4000, max: 12000 },
       partLength: { min: 800, max: 4000 }
     };
     const scenario = generator.generateTestScenario(config);
-    onApplyScenario(scenario.materials, scenario.parts);
+    onApplyScenario(scenario.parts, scenario.materials);
+    setShowSelector(false);
+  };
+
+  const handleLargeScaleScenario = () => {
+    const config = {
+      partCount: { min: 10000, max: 10000 },
+      partLength: { min: 500, max: 5000 }
+    };
+    const scenario = generator.generateTestScenario(config);
+    onApplyScenario(scenario.parts, scenario.materials);
+    setShowSelector(false);
+  };
+
+  const handlePerformanceTestScenario = () => {
+    if (!confirm('這將生成 50000 支零件的效能測試場景，用於標準效能測試。是否繼續？')) {
+      return;
+    }
+    
+    const config = {
+      partCount: { min: 50000, max: 50000 },
+      partLength: { min: 500, max: 5000 }
+    };
+    const scenario = generator.generateTestScenario(config);
+    onApplyScenario(scenario.parts, scenario.materials);
+    setShowSelector(false);
+  };
+
+  const handleUltraLargeScaleScenario = () => {
+    if (!confirm('這將生成 100000 支零件的超大規模測試場景，可能需要較長時間處理。是否繼續？')) {
+      return;
+    }
+    
+    const config = {
+      partCount: { min: 100000, max: 100000 },
+      partLength: { min: 500, max: 5000 }
+    };
+    const scenario = generator.generateTestScenario(config);
+    onApplyScenario(scenario.parts, scenario.materials);
     setShowSelector(false);
   };
 
@@ -50,11 +86,27 @@ export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onAp
             <h4>隨機場景</h4>
             <button onClick={handleRandomScenario} className="scenario-btn">
               完全隨機
-              <small>隨機生成材料和零件</small>
+              <small>隨機生成零件</small>
             </button>
             <button onClick={handleCustomRandomScenario} className="scenario-btn">
               中等複雜度
-              <small>5-12材料, 10-25零件</small>
+              <small>10-25零件</small>
+            </button>
+          </div>
+
+          <div className="scenario-section">
+            <h4>大規模測試場景</h4>
+            <button onClick={handleLargeScaleScenario} className="scenario-btn large-scale">
+              大規模 (10,000支)
+              <small>10,000零件</small>
+            </button>
+            <button onClick={handlePerformanceTestScenario} className="scenario-btn performance-test">
+              效能測試 (50,000支)
+              <small>標準效能測試場景</small>
+            </button>
+            <button onClick={handleUltraLargeScaleScenario} className="scenario-btn ultra-large-scale">
+              終極規模 (100,000支)
+              <small>100,000零件</small>
             </button>
           </div>
 
@@ -89,8 +141,10 @@ export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onAp
           border: 1px solid #ddd;
           border-radius: 8px;
           box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          width: 300px;
+          width: 350px;
           z-index: 1000;
+          max-height: 600px;
+          overflow-y: auto;
         }
 
         .scenario-section {
@@ -136,6 +190,36 @@ export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onAp
           font-size: 12px;
           color: #6c757d;
           margin-top: 2px;
+        }
+
+        .scenario-btn.large-scale {
+          background: #fff3cd;
+          border-color: #ffeaa7;
+        }
+
+        .scenario-btn.large-scale:hover {
+          background: #ffeaa7;
+          border-color: #ffc107;
+        }
+
+        .scenario-btn.performance-test {
+          background: #d4edda;
+          border-color: #c3e6cb;
+        }
+
+        .scenario-btn.performance-test:hover {
+          background: #c3e6cb;
+          border-color: #28a745;
+        }
+
+        .scenario-btn.ultra-large-scale {
+          background: #f8d7da;
+          border-color: #f5c6cb;
+        }
+
+        .scenario-btn.ultra-large-scale:hover {
+          background: #f5c6cb;
+          border-color: #dc3545;
         }
 
         .btn {
