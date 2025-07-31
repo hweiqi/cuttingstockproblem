@@ -89,6 +89,7 @@ private placer: OptimizedPlacerV4;
 - 負責角度匹配和相容性分析
 - 支援容差匹配和交叉位置匹配
 - 使用哈希表分組優化，將 O(n²) 降至 O(n)
+- 量化角度到容差範圍，提升匹配效率
 
 #### 3. OptimizedChainBuilder (`src/core/v6/optimization/OptimizedChainBuilder.ts`)
 - 動態構建共刀鏈
@@ -128,6 +129,14 @@ private readonly BATCH_PROCESSING_THRESHOLD = 100; // 批次處理的閾值
 #### 3. PartService (`src/services/PartService.ts`)
 - 零件管理服務
 - 自動計算零件厚度
+
+#### 4. OptimizationReportService (`src/services/OptimizationReportService.ts`)
+- 優化報告生成服務
+- 提供詳細的優化統計資訊
+
+#### 5. TimeEstimationService (`src/services/TimeEstimationService.ts`)
+- 時間估算服務
+- 根據零件數量和複雜度預估處理時間
 
 ### 組件層
 
@@ -210,8 +219,10 @@ private readonly BATCH_PROCESSING_THRESHOLD = 100; // 批次處理的閾值
 
 ### 處理能力
 - **小規模（< 1000 零件）**：毫秒級處理
-- **大規模（50,000 零件）**：分鐘級處理
-- **材料利用率**：通常 > 85%
+- **中規模（1000-10000 零件）**：秒級處理
+- **大規模（50,000 零件）**：3-5 分鐘內完成
+- **排版率**：> 90%（一般場景）
+- **材料利用率**：> 60%
 
 ## 🧪 測試覆蓋
 
@@ -286,8 +297,10 @@ npm run lint      # 執行 ESLint 檢查
 4. **哈希表優化**：將角度匹配從 O(n²) 降至 O(n)
 5. **延遲展開**：減少記憶體使用
 6. **進度回饋機制**：提升使用者體驗
+7. **Web Worker 支援**：避免 UI 阻塞
+8. **分頁顯示**：有效處理大量結果
 
 ---
 
-*本文件反映了系統 V6.0.0 版本的實際功能和架構*
-*最後更新：2025-07-29*
+*本文件反映了系統 V6.1.0 版本的實際功能和架構*
+*最後更新：2025-07-31*
