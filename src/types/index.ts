@@ -63,7 +63,11 @@ export interface CuttingResult {
   totalWaste: number;
   overallEfficiency: number;
   executionTime: number;
-  unplacedParts: Part[];
+  unplacedParts: Array<{
+    partId: string;
+    instanceId: number;
+    reason: string;
+  }>;
   sharedCutSummary?: {
     totalPairs: number;
     totalSavings: number;

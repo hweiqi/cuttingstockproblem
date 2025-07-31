@@ -71,7 +71,7 @@ describe('快速功能測試 - 檢查詳細排版方案和未排版零件', () =
     // 應該有未排版的零件
     expect(result.unplacedParts).toBeDefined();
     expect(result.unplacedParts.length).toBe(1);
-    expect(result.unplacedParts[0].id).toBe('P1');
+    expect(result.unplacedParts[0].partId).toBe('P1');
   });
 
   it('應該正確顯示共刀優化信息', () => {

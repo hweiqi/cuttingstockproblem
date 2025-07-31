@@ -253,6 +253,187 @@ export const PartInput: React.FC<PartInputProps> = ({
           </>
         )}
       </div>
+      
+      <style jsx>{`
+        .part-input {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          background: white;
+          border-radius: 8px;
+          padding: 15px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .part-input h2 {
+          margin: 0 0 10px 0;
+          font-size: 1.2rem;
+          color: #333;
+        }
+        
+        .part-input h3 {
+          margin: 15px 0 10px 0;
+          font-size: 1rem;
+          color: #555;
+        }
+        
+        .input-section {
+          margin-bottom: 15px;
+        }
+        
+        .input-group {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        
+        .angle-toggle {
+          margin: 10px 0;
+        }
+        
+        .angle-inputs {
+          background-color: #f9f9f9;
+          padding: 10px;
+          border-radius: 4px;
+          margin-bottom: 10px;
+        }
+        
+        .angle-inputs h4 {
+          margin: 0 0 10px 0;
+          font-size: 0.9rem;
+          color: #666;
+        }
+        
+        .angle-grid {
+          display: grid;
+          gap: 10px;
+        }
+        
+        .angle-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        
+        .angle-input-group {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        
+        .angle-input-group label {
+          font-size: 12px;
+          color: #666;
+          min-width: 40px;
+        }
+        
+        .part-list {
+          flex: 1;
+          overflow-y: auto;
+          min-height: 0;
+        }
+        
+        .part-list ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        
+        .part-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background-color: #f9f9f9;
+          margin-bottom: 6px;
+          font-size: 14px;
+        }
+        
+        .part-item > div {
+          flex: 1;
+        }
+        
+        .angle-info {
+          display: block;
+          font-size: 12px;
+          color: #666;
+          margin-top: 2px;
+        }
+        
+        .btn {
+          padding: 8px 16px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        
+        .btn-primary {
+          background-color: #4CAF50;
+          color: white;
+          width: 100%;
+        }
+        
+        .btn-primary:hover {
+          background-color: #45a049;
+        }
+        
+        .btn-danger {
+          background-color: #dc3545;
+          color: white;
+        }
+        
+        .btn-danger:hover {
+          background-color: #c82333;
+        }
+        
+        .btn-sm {
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        
+        .input {
+          padding: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 14px;
+          flex: 1;
+        }
+        
+        .input-sm {
+          width: 60px;
+        }
+        
+        .input:focus {
+          outline: none;
+          border-color: #4CAF50;
+          box-shadow: 0 0 0 2px rgba(76,175,80,0.25);
+        }
+        
+        .error {
+          color: #dc3545;
+          font-size: 12px;
+          margin-top: 5px;
+          padding: 6px;
+          background-color: #f8d7da;
+          border: 1px solid #f5c6cb;
+          border-radius: 4px;
+        }
+        
+        label {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+        }
+        
+        input[type="checkbox"] {
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 };

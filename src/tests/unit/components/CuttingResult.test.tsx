@@ -115,8 +115,8 @@ describe('CuttingResult Component', () => {
       );
 
       // 應該顯示結果摘要
-      expect(screen.getByText('使用母材數量:')).toBeInTheDocument();
-      expect(screen.getByText('1')).toBeInTheDocument();
+      expect(screen.getByText('使用母材:')).toBeInTheDocument();
+      expect(screen.getByText('1 支')).toBeInTheDocument();
       
       // 應該顯示排版方案標題
       expect(screen.getByText('詳細排版方案')).toBeInTheDocument();
@@ -171,10 +171,10 @@ describe('CuttingResult Component', () => {
         <CuttingResult result={resultWithSharedCuts} cuttingLoss={3} />
       );
 
-      // 應該顯示共刀優化摘要
-      expect(screen.getByText('共刀優化摘要')).toBeInTheDocument();
-      expect(screen.getByText('共刀切割數:')).toBeInTheDocument();
+      // 應該顯示共刀標記
       expect(screen.getByText('【共刀】')).toBeInTheDocument();
+      // 應該顯示節省量
+      expect(screen.getByText(/本次共刀節省.*50.*mm/)).toBeInTheDocument();
     });
   });
 
@@ -258,8 +258,8 @@ describe('CuttingResult Component', () => {
       );
 
       // 應該能正常渲染，不會崩潰
-      expect(screen.getByText('排版結果')).toBeInTheDocument();
       expect(screen.getByText('詳細排版方案')).toBeInTheDocument();
+      expect(screen.getByText('優化摘要')).toBeInTheDocument();
     });
   });
 
@@ -300,9 +300,9 @@ describe('CuttingResult Component', () => {
       );
 
       // 應該能正常渲染並顯示分頁
-      expect(screen.getByText('排版結果')).toBeInTheDocument();
-      expect(screen.getByText('使用母材數量:')).toBeInTheDocument();
-      expect(screen.getByText('5000')).toBeInTheDocument();
+      expect(screen.getByText('詳細排版方案')).toBeInTheDocument();
+      expect(screen.getByText('使用母材:')).toBeInTheDocument();
+      expect(screen.getByText('5000 支')).toBeInTheDocument();
       
       // 應該有分頁控制
       expect(screen.getByRole('navigation')).toBeInTheDocument();

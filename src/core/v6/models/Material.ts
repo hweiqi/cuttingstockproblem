@@ -63,7 +63,6 @@ export interface PlacementResult {
  */
 export interface PlacementReport {
   totalParts: number;
-  totalMaterials: number;
   materialUtilization: number;
   wastePercentage: number;
   sharedCuttingPairs: number;

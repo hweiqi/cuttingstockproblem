@@ -7,8 +7,9 @@ import { MaterialInput } from './MaterialInput';
 import { PartInput } from './PartInput';
 import { CuttingResult } from './CuttingResult';
 import { TestScenarioSelector } from './TestScenarioSelector';
-import { OptimizationProgress, PerformanceMetrics } from './ProgressIndicator';
+import { OptimizationProgress } from './ProgressIndicator';
 import { Material, Part, PartAngles, CuttingResult as CuttingResultType } from '../types';
+import { timeEstimationService } from '../services/TimeEstimationService';
 
 /**
  * 優化版切割優化應用
@@ -31,8 +32,10 @@ export const OptimizedCuttingStockApp: React.FC = () => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizationProgress, setOptimizationProgress] = useState(0);
   const [optimizationStage, setOptimizationStage] = useState('');
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [useWebWorker, setUseWebWorker] = useState(true);
-  const [showMetrics, setShowMetrics] = useState(false);
+  const [activeTab, setActiveTab] = useState<'materials' | 'parts'>('materials');
 
   // 初始化 Web Worker
   useEffect(() => {
@@ -104,8 +107,30 @@ export const OptimizedCuttingStockApp: React.FC = () => {
     setIsOptimizing(true);
     setOptimizationProgress(0);
     setOptimizationStage('初始化...');
+    setElapsedTime(0);
+
+    // 計算有斜切角度的零件數
+    const angledPartCount = parts.filter(p => 
+      p.angles && Object.values(p.angles).some(angle => angle > 0 && angle < 90)
+    ).reduce((sum, p) => sum + p.quantity, 0);
+    
+    const totalPartCount = parts.reduce((sum, p) => sum + p.quantity, 0);
+    
+    // 預估時間
+    const estimated = timeEstimationService.estimateExecutionTime(
+      totalPartCount,
+      angledPartCount,
+      materials.length
+    );
+    setEstimatedTime(estimated);
 
     const startTime = performance.now();
+    
+    // 更新經過時間
+    let timeInterval: NodeJS.Timeout | null = null;
+    timeInterval = setInterval(() => {
+      setElapsedTime(performance.now() - startTime);
+    }, 100);
 
     try {
       let optimizationResult;
@@ -149,25 +174,43 @@ export const OptimizedCuttingStockApp: React.FC = () => {
           materials,
           parts,
           cuttingLoss,
-          frontCuttingLoss
+          frontCuttingLoss,
+          (progress) => {
+            setOptimizationProgress(progress.percentage);
+            setOptimizationStage(progress.stage);
+          }
         );
       }
       
       console.log('[App] 優化完成，結果：', optimizationResult);
 
       const endTime = performance.now();
+      const executionTime = Math.round(endTime - startTime);
+      if (timeInterval) clearInterval(timeInterval);
+      
+      // 記錄實際執行時間
+      timeEstimationService.recordExecution(
+        totalPartCount,
+        angledPartCount,
+        materials.length,
+        executionTime
+      );
       
       setResult({
         ...optimizationResult,
-        processingTime: endTime - startTime
+        processingTime: executionTime
       } as CuttingResultType);
       
       setOptimizationProgress(100);
-      setShowMetrics(true);
     } catch (err) {
+      if (timeInterval) clearInterval(timeInterval);
       setError(err instanceof Error ? err.message : '優化過程中發生錯誤');
     } finally {
       setIsOptimizing(false);
+      setOptimizationProgress(0);
+      setOptimizationStage('');
+      setEstimatedTime(0);
+      setElapsedTime(0);
     }
   }, [materials, parts, cuttingLoss, frontCuttingLoss, v6CuttingService, useWebWorker, workerClient]);
 
@@ -202,212 +245,358 @@ export const OptimizedCuttingStockApp: React.FC = () => {
 
   return (
     <div className="cutting-stock-app">
-      <h1>切割優化系統 - 高效能版</h1>
-      
-      <div className="optimization-settings">
-        <label>
-          <input
-            type="checkbox"
-            checked={useWebWorker}
-            onChange={(e) => setUseWebWorker(e.target.checked)}
-            disabled={!CuttingOptimizationWorkerClient.isSupported()}
-          />
-          使用 Web Worker（後台計算）
-        </label>
-        {!CuttingOptimizationWorkerClient.isSupported() && (
-          <span className="warning">（您的瀏覽器不支援 Web Worker）</span>
-        )}
+      <div className="app-header">
+        <h1>切割優化系統 - 高效能版</h1>
+        
+        <div className="header-controls">
+          <div className="optimization-settings">
+            <label>
+              <input
+                type="checkbox"
+                checked={useWebWorker}
+                onChange={(e) => setUseWebWorker(e.target.checked)}
+                disabled={!CuttingOptimizationWorkerClient.isSupported()}
+              />
+              使用 Web Worker（後台計算）
+            </label>
+            {!CuttingOptimizationWorkerClient.isSupported() && (
+              <span className="warning">（您的瀏覽器不支援 Web Worker）</span>
+            )}
+          </div>
+          
+          <TestScenarioSelector onApplyScenario={(testParts: Part[], testMaterials?: Material[]) => {
+            // 清除現有資料
+            materialService.clearAllMaterials();
+            partService.clearAllParts();
+            setMaterials([]);
+            setParts([]);
+            
+            // 載入測試材料（如果有提供）
+            if (testMaterials && testMaterials.length > 0) {
+              testMaterials.forEach(m => {
+                materialService.addMaterial(m.length, m.quantity);
+              });
+              setMaterials([...testMaterials]);
+            }
+            
+            // 載入測試零件
+            testParts.forEach(p => {
+              partService.addPart(p.length, p.quantity, p.angles);
+            });
+            
+            setParts([...testParts]);
+            setResult(null);
+            setError('');
+          }} />
+        </div>
       </div>
 
-      <TestScenarioSelector onApplyScenario={(testParts: Part[], testMaterials?: Material[]) => {
-        // 清除現有資料
-        materialService.clearAllMaterials();
-        partService.clearAllParts();
-        setMaterials([]);
-        setParts([]);
-        
-        // 載入測試材料（如果有提供）
-        if (testMaterials && testMaterials.length > 0) {
-          testMaterials.forEach(m => {
-            materialService.addMaterial(m.length, m.quantity);
-          });
-          setMaterials([...testMaterials]);
-        }
-        
-        // 載入測試零件
-        testParts.forEach(p => {
-          partService.addPart(p.length, p.quantity, p.angles);
-        });
-        
-        setParts([...testParts]);
-        setResult(null);
-        setError('');
-      }} />
-      
-      <div className="input-section">
-        <MaterialInput
-          materials={materials}
-          onAddMaterial={handleAddMaterial}
-          onRemoveMaterial={handleRemoveMaterial}
-        />
-        
-        <PartInput
-          parts={parts}
-          onAddPart={handleAddPart}
-          onRemovePart={handleRemovePart}
-        />
-      </div>
-      
-      <div className="loss-settings">
-        <div>
-          <label htmlFor="cuttingLoss">每切割刀損耗 (mm):</label>
-          <input
-            id="cuttingLoss"
-            type="number"
-            value={cuttingLoss}
-            onChange={(e) => setCuttingLoss(Number(e.target.value))}
-            min="0"
-            max="50"
-          />
+      <div className="app-main">
+        <div className="left-panel">
+          <div className="panel-tabs">
+            <button 
+              className={`tab ${activeTab === 'materials' ? 'active' : ''}`}
+              onClick={() => setActiveTab('materials')}
+            >
+              母材設定 ({materials.length})
+            </button>
+            <button 
+              className={`tab ${activeTab === 'parts' ? 'active' : ''}`}
+              onClick={() => setActiveTab('parts')}
+            >
+              零件設定 ({parts.length})
+            </button>
+          </div>
+          
+          <div className="tab-content">
+            {activeTab === 'materials' ? (
+              <MaterialInput
+                materials={materials}
+                onAddMaterial={handleAddMaterial}
+                onRemoveMaterial={handleRemoveMaterial}
+              />
+            ) : (
+              <PartInput
+                parts={parts}
+                onAddPart={handleAddPart}
+                onRemovePart={handleRemovePart}
+              />
+            )}
+          </div>
+          
+          <div className="control-panel">
+            <div className="loss-settings">
+              <h3>切割參數</h3>
+              <div className="loss-inputs">
+                <div>
+                  <label htmlFor="cuttingLoss">每切割刀損耗 (mm):</label>
+                  <input
+                    id="cuttingLoss"
+                    type="number"
+                    value={cuttingLoss}
+                    onChange={(e) => setCuttingLoss(Number(e.target.value))}
+                    min="0"
+                    max="50"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="frontCuttingLoss">前端切割損耗 (mm):</label>
+                  <input
+                    id="frontCuttingLoss"
+                    type="number"
+                    value={frontCuttingLoss}
+                    onChange={(e) => setFrontCuttingLoss(Number(e.target.value))}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="summary-info">
+              <div className="summary-item">
+                <span className="label">總母材數量</span>
+                <span className="value">{totalMaterials}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">總零件數量</span>
+                <span className="value">{totalParts}</span>
+              </div>
+            </div>
+            
+            {error && <div className="error">{error}</div>}
+            
+            <div className="action-buttons">
+              <button 
+                onClick={handleOptimize} 
+                disabled={materials.length === 0 || parts.length === 0 || isOptimizing}
+                className="btn-optimize"
+              >
+                {isOptimizing ? '優化中...' : '開始優化'}
+              </button>
+              <button onClick={handleClearAll} disabled={isOptimizing}>清除所有資料</button>
+            </div>
+          </div>
         </div>
-        <div>
-          <label htmlFor="frontCuttingLoss">前端切割損耗 (mm):</label>
-          <input
-            id="frontCuttingLoss"
-            type="number"
-            value={frontCuttingLoss}
-            onChange={(e) => setFrontCuttingLoss(Number(e.target.value))}
-            min="0"
-            max="100"
-          />
-        </div>
-      </div>
-      
-      <div className="action-buttons">
-        <button 
-          onClick={handleOptimize} 
-          disabled={materials.length === 0 || parts.length === 0 || isOptimizing}
-        >
-          {isOptimizing ? '優化中...' : '開始優化'}
-        </button>
-        <button onClick={handleClearAll} disabled={isOptimizing}>清除所有資料</button>
-      </div>
-      
-      {error && <div className="error">{error}</div>}
-      
-      <div className="summary">
-        <p>總母材數量: {totalMaterials}</p>
-        <p>總零件數量: {totalParts}</p>
-      </div>
-      
-      {result && (
-        <>
-          <CuttingResult result={result} cuttingLoss={cuttingLoss} />
-          {showMetrics && (
-            <PerformanceMetrics
-              metrics={{
-                totalParts,
-                processingTime: result.processingTime || 0,
-                materialUtilization: result.materialUtilization || 0,
-                optimizationMethod: useWebWorker ? 'Web Worker 優化' : '同步優化'
-              }}
-            />
+        
+        <div className="right-panel">
+          {result && (
+            <CuttingResult result={result} cuttingLoss={cuttingLoss} />
           )}
-        </>
-      )}
+        </div>
+      </div>
       
       <OptimizationProgress
         isOptimizing={isOptimizing}
         progress={optimizationProgress}
         stage={optimizationStage}
+        estimatedTime={estimatedTime}
+        elapsedTime={elapsedTime}
         onCancel={handleCancelOptimization}
       />
 
       <style jsx>{`
         .cutting-stock-app {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 20px;
+          width: 100%;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
         }
         
-        h1 {
+        .app-header {
+          padding: 10px 20px;
+          background: #f5f5f5;
+          border-bottom: 1px solid #ddd;
+          position: relative;
+          z-index: 10;
+          overflow: visible;
+        }
+        
+        .app-header h1 {
+          font-size: 1.5rem;
+          margin: 0 0 10px 0;
           text-align: center;
-          margin-bottom: 30px;
+        }
+        
+        .header-controls {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 20px;
+          position: relative;
         }
         
         .optimization-settings {
-          margin-bottom: 20px;
-          padding: 15px;
-          background: #f5f5f5;
-          border-radius: 8px;
+          display: flex;
+          align-items: center;
         }
         
         .optimization-settings label {
           display: flex;
           align-items: center;
           gap: 10px;
+          font-size: 14px;
         }
         
         .warning {
           color: #ff9800;
-          font-size: 14px;
+          font-size: 12px;
           margin-left: 10px;
         }
         
-        .input-section {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 20px;
+        .app-main {
+          flex: 1;
+          display: flex;
+          overflow: hidden;
+          height: calc(100vh - 100px);
+        }
+        
+        .left-panel {
+          width: 30%;
+          min-width: 400px;
+          max-width: 500px;
+          display: flex;
+          flex-direction: column;
+          background: #fafafa;
+          border-right: 1px solid #ddd;
+        }
+        
+        .right-panel {
+          flex: 1;
+          min-width: 700px;
+          padding: 30px;
+          overflow-y: auto;
+          background: white;
+        }
+        
+        .panel-tabs {
+          display: flex;
+          background: #e9ecef;
+          border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+          flex: 1;
+          padding: 12px 20px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          color: #495057;
+          transition: all 0.2s;
+          border-bottom: 3px solid transparent;
+        }
+        
+        .tab:hover {
+          background: rgba(0,0,0,0.05);
+        }
+        
+        .tab.active {
+          background: white;
+          color: #4CAF50;
+          border-bottom-color: #4CAF50;
+        }
+        
+        .tab-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 20px;
+        }
+        
+        .control-panel {
+          background: white;
+          padding: 20px;
+          border-top: 1px solid #ddd;
         }
         
         .loss-settings {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 20px;
-          background: #f9f9f9;
-          padding: 15px;
-          border-radius: 5px;
+          margin-bottom: 15px;
         }
         
-        .loss-settings div {
-          display: flex;
-          align-items: center;
-          gap: 10px;
+        .loss-settings h3 {
+          font-size: 1rem;
+          margin: 0 0 10px 0;
+          color: #333;
         }
         
-        .loss-settings label {
+        .loss-inputs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+        }
+        
+        .loss-inputs > div {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        
+        .loss-inputs label {
           font-weight: 500;
+          font-size: 13px;
+          color: #666;
         }
         
-        .loss-settings input {
-          width: 80px;
-          padding: 5px;
+        .loss-inputs input {
+          width: 100%;
+          padding: 6px 10px;
           border: 1px solid #ddd;
           border-radius: 4px;
+          font-size: 14px;
+        }
+        
+        .summary-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+          margin-bottom: 15px;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 6px;
+        }
+        
+        .summary-info .summary-item {
+          text-align: center;
+        }
+        
+        .summary-info .label {
+          display: block;
+          font-size: 12px;
+          color: #666;
+          margin-bottom: 5px;
+        }
+        
+        .summary-info .value {
+          display: block;
+          font-size: 24px;
+          font-weight: bold;
+          color: #333;
         }
         
         .action-buttons {
           display: flex;
           gap: 10px;
-          margin-bottom: 20px;
+          margin-bottom: 15px;
         }
         
         .action-buttons button {
-          padding: 10px 20px;
-          font-size: 16px;
+          flex: 1;
+          padding: 10px 15px;
+          font-size: 14px;
           border: none;
           border-radius: 5px;
           cursor: pointer;
           transition: background-color 0.3s;
         }
         
-        .action-buttons button:first-child {
+        .btn-optimize {
           background-color: #4CAF50;
           color: white;
+          font-weight: 600;
         }
         
-        .action-buttons button:first-child:hover:not(:disabled) {
+        .btn-optimize:hover:not(:disabled) {
           background-color: #45a049;
         }
         
@@ -430,27 +619,44 @@ export const OptimizedCuttingStockApp: React.FC = () => {
           color: #c62828;
           padding: 10px;
           border-radius: 5px;
-          margin-bottom: 20px;
+          margin-bottom: 15px;
+          font-size: 14px;
         }
         
-        .summary {
-          background-color: #e3f2fd;
-          padding: 15px;
-          border-radius: 5px;
-          margin-bottom: 20px;
-        }
         
-        .summary p {
-          margin: 5px 0;
-          font-weight: 500;
+        @media (max-width: 1024px) {
+          .app-main {
+            flex-direction: column;
+          }
+          
+          .left-panel {
+            width: 100%;
+            min-width: unset;
+            height: 50%;
+            border-right: none;
+            border-bottom: 1px solid #ddd;
+          }
+          
+          .right-panel {
+            height: 50%;
+          }
+          
+          .loss-inputs {
+            grid-template-columns: 1fr;
+          }
         }
         
         @media (max-width: 768px) {
-          .input-section {
-            grid-template-columns: 1fr;
+          .header-controls {
+            flex-direction: column;
+            align-items: stretch;
           }
           
-          .loss-settings {
+          .optimization-settings {
+            margin-bottom: 10px;
+          }
+          
+          .action-buttons {
             flex-direction: column;
           }
         }

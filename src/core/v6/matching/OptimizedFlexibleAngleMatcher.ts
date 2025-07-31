@@ -1,5 +1,6 @@
 import { Part, AnglePositionType, isBevelAngle } from '../models/Part';
 import { AngleMatch, calculateSharedCutSavings, calculateMatchScore } from '../models/SharedCut';
+import { ProgressCallback } from '../system/V6System';
 
 interface AngleGroup {
   angle: number;
@@ -111,7 +112,7 @@ export class OptimizedFlexibleAngleMatcher {
   /**
    * 找出一組零件之間的最佳匹配組合（優化版）
    */
-  findBestMatchCombination(parts: Part[]): AngleMatch[] {
+  findBestMatchCombination(parts: Part[], onProgress?: ProgressCallback): AngleMatch[] {
     if (parts.length < 2) return [];
 
     // 步驟1：使用哈希表按角度分組
@@ -128,6 +129,7 @@ export class OptimizedFlexibleAngleMatcher {
     let foundGoodMatches = 0;
 
     // 步驟3：從每個角度組中找匹配
+    let processedGroups = 0;
     for (const group of sortedGroups) {
       const groupMatches = this.findMatchesInGroup(group, usedPairs);
       
@@ -139,6 +141,17 @@ export class OptimizedFlexibleAngleMatcher {
         if (foundGoodMatches >= targetMatchCount * this.EARLY_TERMINATION_THRESHOLD) {
           return selectedMatches.sort((a, b) => b.score - a.score);
         }
+      }
+      
+      processedGroups++;
+      // 每處理一個組就更新進度
+      if (onProgress) {
+        const progress = 5 + Math.min(28, (processedGroups / Math.max(1, sortedGroups.length)) * 28);
+        onProgress({
+          stage: '分析共刀潛力',
+          percentage: Math.round(progress),
+          details: `已分析 ${processedGroups}/${sortedGroups.length} 個角度組，找到 ${foundGoodMatches} 個匹配`
+        });
       }
     }
 
@@ -201,16 +214,18 @@ export class OptimizedFlexibleAngleMatcher {
   /**
    * 評估一組零件的共刀潛力（優化版）
    */
-  evaluateSharedCuttingPotential(parts: Part[]): {
+  evaluateSharedCuttingPotential(parts: Part[], onProgress?: ProgressCallback): {
     totalPotentialSavings: number;
     matchCount: number;
     averageSavingsPerMatch: number;
+    matches: AngleMatch[];
   } {
     if (parts.length < 2) {
       return {
         totalPotentialSavings: 0,
         matchCount: 0,
-        averageSavingsPerMatch: 0
+        averageSavingsPerMatch: 0,
+        matches: []
       };
     }
 
@@ -220,7 +235,13 @@ export class OptimizedFlexibleAngleMatcher {
       ? this.sampleParts(parts, sampleSize)
       : parts;
 
-    const matches = this.findBestMatchCombination(sampledParts);
+    onProgress?.({
+      stage: '分析共刀潛力',
+      percentage: 5,
+      details: `正在分析 ${sampledParts.length} 個零件的角度...`
+    });
+
+    const matches = this.findBestMatchCombination(sampledParts, onProgress);
     
     // 根據抽樣結果推算總體潛力
     const scaleFactor = parts.length / sampledParts.length;
@@ -230,7 +251,8 @@ export class OptimizedFlexibleAngleMatcher {
     return {
       totalPotentialSavings: totalSavings,
       matchCount: estimatedMatchCount,
-      averageSavingsPerMatch: estimatedMatchCount > 0 ? totalSavings / estimatedMatchCount : 0
+      averageSavingsPerMatch: estimatedMatchCount > 0 ? totalSavings / estimatedMatchCount : 0,
+      matches
     };
   }
 

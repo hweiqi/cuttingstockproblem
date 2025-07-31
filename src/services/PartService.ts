@@ -124,7 +124,7 @@ export class PartService {
   }
 
   private generateId(): string {
-    return `part-${++this.idCounter}-${Date.now()}`;
+    return `P${++this.idCounter}`;
   }
 
   private validateAngles(angles: PartAngles): void {

@@ -1,7 +1,8 @@
-import { V6System } from '../core/v6/system/V6System';
+import { V6System, ProgressCallback } from '../core/v6/system/V6System';
 import { PartWithQuantity } from '../core/v6/models/Part';
 import { Material as V6Material, PlacementResult } from '../core/v6/models/Material';
 import { Material, Part, CutPlan } from '../types';
+import { OptimizationReportService } from './OptimizationReportService';
 
 /**
  * V6切割優化服務
@@ -9,6 +10,7 @@ import { Material, Part, CutPlan } from '../types';
  */
 export class V6CuttingService {
   private v6System: V6System;
+  private reportService: OptimizationReportService;
   private currentConstraints: {
     cuttingLoss: number;
     frontEndLoss: number;
@@ -25,6 +27,8 @@ export class V6CuttingService {
       prioritizeMixedChains: true,
       constraints: this.currentConstraints
     });
+    
+    this.reportService = new OptimizationReportService(5);
   }
 
   /**
@@ -65,19 +69,37 @@ export class V6CuttingService {
     const totalMaterialLength = cutPlans.reduce((sum, plan) => sum + plan.materialLength, 0);
     const overallEfficiency = totalMaterialLength > 0 ? (totalUsedLength / totalMaterialLength) * 100 : 0;
     
-    // 處理未排版零件
-    let unplacedParts: Part[] = [];
+    // 處理未排版零件 - 保留詳細原因資訊
+    let unplacedParts: Array<{partId: string; instanceId: number; reason: string}> = [];
     if (workerResult.unplacedParts && workerResult.unplacedParts.length > 0) {
-      // 從 Worker 的未排版結果轉換回原始 Part 格式
-      const unplacedPartIds = new Set(workerResult.unplacedParts.map((up: any) => up.partId));
-      unplacedParts = parts.filter(part => unplacedPartIds.has(part.id));
+      // 直接使用 Worker 返回的詳細未排版資訊
+      unplacedParts = workerResult.unplacedParts.map((up: any) => ({
+        partId: up.partId || up.id,
+        instanceId: up.instanceId || 0,
+        reason: up.reason || '未知原因'
+      }));
+      
+      console.log(`[V6CuttingService] 未排版零件詳細資訊:`, unplacedParts.slice(0, 5));
     } else if (workerResult.placedParts) {
       // 基於已排版零件來推算未排版零件
-      const placedPartIds = new Set();
+      const placedPartInstanceKeys = new Set();
       workerResult.placedParts.forEach((placedPart: any) => {
-        placedPartIds.add(placedPart.partId);
+        placedPartInstanceKeys.add(`${placedPart.partId}_${placedPart.partInstanceId || 0}`);
       });
-      unplacedParts = parts.filter(part => !placedPartIds.has(part.id));
+      
+      // 為每個零件的每個實例檢查是否已排版
+      parts.forEach(part => {
+        for (let i = 0; i < part.quantity; i++) {
+          const instanceKey = `${part.id}_${i}`;
+          if (!placedPartInstanceKeys.has(instanceKey)) {
+            unplacedParts.push({
+              partId: part.id,
+              instanceId: i,
+              reason: '未能找到合適的排版位置'
+            });
+          }
+        }
+      });
     }
     
     // 統計共刀資訊
@@ -114,55 +136,13 @@ export class V6CuttingService {
    * 格式化 Worker 報告
    */
   private formatWorkerReport(workerResult: any): string {
-    const report = [];
-    
-    report.push('=== V6 切割優化系統報告 ===\n');
-    
-    if (workerResult.report) {
-      report.push('輸入摘要:');
-      report.push(`  總零件數: ${workerResult.report.totalParts}`);
-      report.push(`  總材料數: ${workerResult.report.totalMaterials}`);
-      report.push('');
-    }
-    
-    if (workerResult.optimization) {
-      report.push('優化結果:');
-      report.push(`  共刀鏈數: ${workerResult.optimization.chainsBuilt}`);
-      report.push(`  混合鏈數: ${workerResult.optimization.mixedChainsCreated}`);
-      report.push(`  總節省: ${workerResult.optimization.totalChainSavings.toFixed(2)}mm`);
-      report.push(`  角度容差: ±${workerResult.optimization.anglesToleranceUsed}°`);
-      report.push('');
-    }
-    
-    report.push('排版結果:');
-    report.push(`  已排版零件: ${workerResult.placedParts?.length || 0}`);
-    report.push(`  未排版零件: ${workerResult.unplacedParts?.length || 0}`);
-    report.push(`  材料利用率: ${((workerResult.report?.materialUtilization || 0) * 100).toFixed(2)}%`);
-    report.push(`  使用材料數: ${workerResult.usedMaterials?.length || 0}`);
-    
-    if (workerResult.performance) {
-      report.push('');
-      report.push('性能指標:');
-      report.push(`  匹配時間: ${workerResult.performance.matchingTime.toFixed(2)}ms`);
-      report.push(`  鏈構建時間: ${workerResult.performance.chainBuildingTime.toFixed(2)}ms`);
-      report.push(`  排版時間: ${workerResult.performance.placementTime.toFixed(2)}ms`);
-      report.push(`  總時間: ${workerResult.performance.totalTime.toFixed(2)}ms`);
-    }
-    
-    if (workerResult.warnings && workerResult.warnings.length > 0) {
-      report.push('\n警告:');
-      workerResult.warnings.forEach((warning: string) => {
-        report.push(`  - ${warning}`);
-      });
-    }
-    
-    return report.join('\n');
+    return this.reportService.formatForWorker(workerResult);
   }
 
   /**
    * 執行切割優化 
    */
-  optimize(materials: Material[], parts: Part[], cuttingLoss: number, frontCuttingLoss: number): any {
+  optimize(materials: Material[], parts: Part[], cuttingLoss: number, frontCuttingLoss: number, onProgress?: ProgressCallback): any {
     // 更新切割損耗設置
     this.updateConstraints(cuttingLoss, frontCuttingLoss);
     
@@ -186,7 +166,7 @@ export class V6CuttingService {
       quantity: 0 // 設為0表示無限供應
     }));
 
-    const v6Result = this.v6System.optimize(v6Parts, v6Materials);
+    const v6Result = this.v6System.optimize(v6Parts, v6Materials, onProgress);
     
     // 執行優化並獲取詳細結果
     const cutPlans = this.convertToCutPlans(v6Result, materials);
@@ -211,15 +191,23 @@ export class V6CuttingService {
       });
     }
     
-    // 如果 V6 系統返回了 unplacedParts，使用它們
-    let unplacedParts: Part[] = [];
+    // 如果 V6 系統返回了 unplacedParts，使用它們的詳細資訊
+    let unplacedParts: Array<{partId: string; instanceId: number; reason: string}> = [];
     if (v6Result.unplacedParts && v6Result.unplacedParts.length > 0) {
-      // 從 V6 的未排版結果轉換回原始 Part 格式
-      const unplacedPartIds = new Set(v6Result.unplacedParts.map(up => up.partId));
-      unplacedParts = parts.filter(part => unplacedPartIds.has(part.id));
+      // 直接使用 V6 的詳細未排版資訊
+      unplacedParts = v6Result.unplacedParts.map(up => ({
+        partId: up.partId,
+        instanceId: up.instanceId,
+        reason: up.reason || '未知原因'
+      }));
     } else {
       // 備用方案：基於已排版零件來推算未排版零件
-      unplacedParts = parts.filter(part => !placedPartIds.has(part.id));
+      const unplacedPartsList = parts.filter(part => !placedPartIds.has(part.id));
+      unplacedParts = unplacedPartsList.map(part => ({
+        partId: part.id,
+        instanceId: 0,
+        reason: '未能找到合適的排版位置'
+      }));
     }
     
     // 統計共刀資訊
@@ -258,7 +246,7 @@ export class V6CuttingService {
   /**
    * 執行切割優化（內部方法）
    */
-  optimizeCutting(materials: Material[], parts: Part[]): CutPlan[] {
+  optimizeCutting(materials: Material[], parts: Part[], onProgress?: ProgressCallback): CutPlan[] {
     // 轉換輸入格式
     const v6Parts: PartWithQuantity[] = parts.map(part => ({
       id: part.id,
@@ -280,7 +268,7 @@ export class V6CuttingService {
     }));
 
     // 執行優化
-    const result = this.v6System.optimize(v6Parts, v6Materials);
+    const result = this.v6System.optimize(v6Parts, v6Materials, onProgress);
 
     // 轉換結果格式
     return this.convertToCutPlans(result, materials);

@@ -97,6 +97,8 @@ interface OptimizationProgressProps {
   isOptimizing: boolean;
   progress: number;
   stage?: string;
+  estimatedTime?: number;
+  elapsedTime?: number;
   onCancel?: () => void;
 }
 
@@ -108,28 +110,68 @@ export const OptimizationProgress: React.FC<OptimizationProgressProps> = ({
   isOptimizing,
   progress,
   stage = '初始化...',
+  estimatedTime = 0,
+  elapsedTime = 0,
   onCancel
 }) => {
   if (!isOptimizing) return null;
 
-  const getStageMessage = () => {
-    if (progress < 10) return '初始化優化系統...';
-    if (progress < 30) return '分析零件共刀潛力...';
-    if (progress < 50) return '構建共刀鏈...';
-    if (progress < 80) return '執行排版優化...';
-    if (progress < 100) return '完成最終優化...';
-    return '優化完成！';
+  // 根據進度計算共刀分析的子進度
+  const getDetailedStage = () => {
+    if (stage.includes('分析共刀潛力')) {
+      // 在分析階段顯示更詳細的進度
+      if (progress < 11) return '正在讀取零件資料...';
+      if (progress < 22) return '正在分析零件角度...';
+      if (progress < 33) return '正在搜尋共刀配對...';
+      return stage;
+    }
+    return stage;
   };
 
   return (
     <div className="optimization-progress">
       <h3>正在優化排版</h3>
       
+      {/* 時間資訊 */}
+      {(estimatedTime > 0 || elapsedTime > 0) && (
+        <div className="time-info">
+          <div className="time-item">
+            <span className="time-label">預估時間：</span>
+            <span className="time-value">{formatTime(estimatedTime)}</span>
+          </div>
+          <div className="time-item">
+            <span className="time-label">已經過：</span>
+            <span className="time-value">{formatTime(elapsedTime)}</span>
+          </div>
+          <div className="time-item">
+            <span className="time-label">剩餘時間：</span>
+            <span className="time-value">
+              {elapsedTime >= estimatedTime 
+                ? '即將完成...' 
+                : formatTime(Math.max(0, estimatedTime - elapsedTime))}
+            </span>
+          </div>
+        </div>
+      )}
+      
       <ProgressIndicator
         progress={progress}
-        message={stage || getStageMessage()}
+        message={getDetailedStage()}
         showPercentage={true}
       />
+      
+      {/* 共刀分析的詳細資訊 */}
+      {stage.includes('分析共刀潛力') && (
+        <div className="analysis-details">
+          <div className="detail-item">
+            <span className="detail-label">🔍 正在分析的零件角度配對</span>
+            <span className="detail-value">從系統中尋找最佳配對...</span>
+          </div>
+          <div className="progress-hint">
+            提示：共刀分析會檢查所有零件的角度相容性
+          </div>
+        </div>
+      )}
 
       {onCancel && (
         <button
@@ -183,10 +225,86 @@ export const OptimizationProgress: React.FC<OptimizationProgressProps> = ({
           background: #ccc;
           cursor: not-allowed;
         }
+        
+        .analysis-details {
+          margin-top: 16px;
+          padding: 12px;
+          background: #f0f7ff;
+          border-radius: 6px;
+          border: 1px solid #b3d9ff;
+        }
+        
+        .detail-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        
+        .detail-label {
+          font-size: 13px;
+          color: #0066cc;
+          font-weight: 500;
+        }
+        
+        .detail-value {
+          font-size: 12px;
+          color: #666;
+        }
+        
+        .progress-hint {
+          font-size: 12px;
+          color: #888;
+          font-style: italic;
+          margin-top: 8px;
+        }
+        
+        .time-info {
+          display: flex;
+          justify-content: space-between;
+          margin: 12px 0 16px 0;
+          padding: 12px;
+          background: #f5f5f5;
+          border-radius: 6px;
+          border: 1px solid #e0e0e0;
+        }
+        
+        .time-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .time-label {
+          font-size: 11px;
+          color: #666;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        .time-value {
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+        }
       `}</style>
     </div>
   );
 };
+
+// 格式化時間顯示
+function formatTime(milliseconds: number): string {
+  if (milliseconds < 1000) {
+    return `${Math.round(milliseconds)}ms`;
+  } else if (milliseconds < 60000) {
+    return `${(milliseconds / 1000).toFixed(1)}秒`;
+  } else {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.round((milliseconds % 60000) / 1000);
+    return `${minutes}分${seconds}秒`;
+  }
+}
 
 interface PerformanceMetricsProps {
   metrics: {

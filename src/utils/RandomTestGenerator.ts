@@ -101,7 +101,7 @@ export class RandomTestGenerator {
       usedLengths.add(length);
       
       materials.push({
-        id: `M${i + 1}-${baseTime}-${i}`,
+        id: `M${i + 1}`,
         length: length
       });
     }
@@ -134,7 +134,7 @@ export class RandomTestGenerator {
         const length = Math.round(this.random(minLength / 10, maxLength / 10)) * 10; // 10的倍數
         
         const part: Part = {
-          id: `P${i + 1}-${baseTime}-${i}`,
+          id: `P${i + 1}`,
           length: length,
           quantity: this.random(1, 10)
         };

@@ -2,6 +2,7 @@ import { PartWithQuantity, Part, AnglePositionType } from '../models/Part';
 import { SharedCutChain, ChainPart, ChainConnection, ChainBuildReport, determineChainStructure } from '../models/Chain';
 import { OptimizedFlexibleAngleMatcher } from '../matching/OptimizedFlexibleAngleMatcher';
 import { AngleMatch } from '../models/SharedCut';
+import { ProgressCallback } from '../system/V6System';
 
 interface ChainBuildResult {
   chains: SharedCutChain[];
@@ -42,7 +43,7 @@ export class OptimizedChainBuilder {
   /**
    * 構建共刀鏈並返回詳細報告
    */
-  buildChainsWithReport(parts: PartWithQuantity[]): ChainBuildResult {
+  buildChainsWithReport(parts: PartWithQuantity[], onProgress?: ProgressCallback): ChainBuildResult {
     const startTime = performance.now();
     
     // 過濾出有斜切角度的零件
@@ -61,14 +62,20 @@ export class OptimizedChainBuilder {
     const batchedParts = this.initializeBatchedParts(angledParts);
     const chains: SharedCutChain[] = [];
     
+    onProgress?.({
+      stage: '構建共刀鏈',
+      percentage: 40,
+      details: `正在處理 ${angledParts.length} 個有斜切角度的零件`
+    });
+    
     // 策略1：優先處理大批量相同零件
-    const largeBatchChains = this.processBatchChains(batchedParts, chains.length);
+    const largeBatchChains = this.processBatchChains(batchedParts, chains.length, onProgress);
     chains.push(...largeBatchChains);
     
     // 策略2：處理剩餘零件的混合共刀（限制處理數量）
     if (chains.length < this.MAX_CHAINS) {
       const remainingParts = batchedParts.filter(bp => bp.remainingQuantity > 0);
-      const mixedChains = this.processMixedChains(remainingParts, chains.length);
+      const mixedChains = this.processMixedChains(remainingParts, chains.length, onProgress);
       chains.push(...mixedChains);
     }
     
@@ -108,12 +115,13 @@ export class OptimizedChainBuilder {
   /**
    * 處理批次共刀鏈
    */
-  private processBatchChains(batchedParts: BatchedPart[], currentChainCount: number): SharedCutChain[] {
+  private processBatchChains(batchedParts: BatchedPart[], currentChainCount: number, onProgress?: ProgressCallback): SharedCutChain[] {
     const chains: SharedCutChain[] = [];
     
     // 按數量排序，優先處理大批量
     const sortedParts = [...batchedParts].sort((a, b) => b.remainingQuantity - a.remainingQuantity);
     
+    let processedParts = 0;
     for (const batchedPart of sortedParts) {
       if (chains.length + currentChainCount >= this.MAX_CHAINS - 100) break; // 保留一些空間給混合鏈
       
@@ -122,6 +130,17 @@ export class OptimizedChainBuilder {
       
       const batchChains = this.createBatchChainsForPart(batchedPart);
       chains.push(...batchChains);
+      
+      processedParts++;
+      // 每處理一個零件就更新進度
+      if (onProgress) {
+        const progress = 40 + Math.min(20, (processedParts / Math.max(1, sortedParts.length)) * 20);
+        onProgress({
+          stage: '構建共刀鏈',
+          percentage: Math.round(progress),
+          details: `已處理 ${processedParts}/${sortedParts.length} 個零件類型，建立 ${chains.length} 個共刀鏈`
+        });
+      }
       
       // 限制鏈數量
       if (chains.length + currentChainCount >= this.MAX_CHAINS) {
@@ -225,7 +244,7 @@ export class OptimizedChainBuilder {
   /**
    * 處理混合共刀鏈
    */
-  private processMixedChains(batchedParts: BatchedPart[], currentChainCount: number): SharedCutChain[] {
+  private processMixedChains(batchedParts: BatchedPart[], currentChainCount: number, onProgress?: ProgressCallback): SharedCutChain[] {
     const chains: SharedCutChain[] = [];
     
     // 限制處理的零件類型數量
@@ -259,6 +278,16 @@ export class OptimizedChainBuilder {
         chains.push(chain);
       } else {
         processedCount++;
+      }
+      
+      // 更新進度
+      if (onProgress && processedCount % 5 === 0) {
+        const progress = 60 + Math.min(6, (processedCount / Math.max(1, evaluatedParts.length)) * 6);
+        onProgress({
+          stage: '構建共刀鏈',
+          percentage: Math.round(progress),
+          details: `正在構建混合共刀鏈... 已建立 ${chains.length} 個鏈`
+        });
       }
       
       // 限制迭代次數

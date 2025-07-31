@@ -134,7 +134,6 @@ export interface CuttingResult {
   processingTime: number;       // 處理時間（毫秒）
   summary: {
     totalParts: number;
-    totalMaterials: number;
     sharedCutPairs: number;
     materialUtilization: string;    // 百分比字串，如 "85.6%"
   };

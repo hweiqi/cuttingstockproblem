@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from '@jest/globals';
 import { V6System } from '../../../core/v6/system/V6System';
 import { OptimizedFlexibleAngleMatcher } from '../../../core/v6/matching/OptimizedFlexibleAngleMatcher';
-import { OptimizedDynamicChainBuilder } from '../../../core/v6/optimization/OptimizedDynamicChainBuilder';
+import { OptimizedChainBuilder } from '../../../core/v6/optimization/OptimizedChainBuilder';
 import { PartWithQuantity } from '../../../core/v6/models/Part';
 import { Material } from '../../../core/v6/models/Material';
 
@@ -95,7 +95,7 @@ describe('優化效能測試', () => {
 
   describe('動態鏈構建優化效能', () => {
     test('應該快速構建1000個零件的共刀鏈', () => {
-      const builder = new OptimizedDynamicChainBuilder();
+      const builder = new OptimizedChainBuilder();
       const parts: PartWithQuantity[] = [];
       
       for (let i = 0; i < 100; i++) {
@@ -112,7 +112,7 @@ describe('優化效能測試', () => {
     });
 
     test('應該支援增量式構建', () => {
-      const builder = new OptimizedDynamicChainBuilder();
+      const builder = new OptimizedChainBuilder();
       const parts: PartWithQuantity[] = [];
       let progressUpdates = 0;
       
@@ -121,7 +121,7 @@ describe('優化效能測試', () => {
       }
 
       const startTime = performance.now();
-      const result = builder.buildChainsWithProgress(parts, (progress) => {
+      const result = builder.buildChainsWithReport(parts, (progress) => {
         progressUpdates++;
         expect(progress).toBeGreaterThanOrEqual(0);
         expect(progress).toBeLessThanOrEqual(100);

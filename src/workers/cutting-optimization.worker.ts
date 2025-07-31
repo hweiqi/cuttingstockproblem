@@ -49,22 +49,8 @@ async function handleOptimize(
     // 發送初始進度
     sendProgress(id, 0);
 
-    // 進度更新（逐步增長而非隨機）
-    let currentProgress = 0;
-    const progressInterval = setInterval(() => {
-      if (cancelled || currentRequestId !== id) {
-        clearInterval(progressInterval);
-        return;
-      }
-      // 逐步增長進度，最多到90%（最後10%留給實際完成）
-      currentProgress = Math.min(90, currentProgress + 5);
-      sendProgress(id, currentProgress);
-    }, 500);
-
-    // 執行優化
-    const result = await executeOptimization(parts, materials);
-
-    clearInterval(progressInterval);
+    // 執行優化並傳遞真實進度
+    const result = await executeOptimization(parts, materials, id);
 
     if (cancelled || currentRequestId !== id) {
       return;
@@ -89,7 +75,8 @@ async function handleOptimize(
  */
 async function executeOptimization(
   parts: PartWithQuantity[],
-  materials: Material[]
+  materials: Material[],
+  requestId: string
 ): Promise<PlacementResult> {
   if (!v6System) {
     throw new Error('系統未初始化');
@@ -98,16 +85,17 @@ async function executeOptimization(
   console.log(`[Worker] 開始優化：${parts.length} 種零件, ${materials.length} 種材料`);
   
   try {
-    // 使用優化系統執行計算
+    // 使用優化系統執行計算，並傳遞進度回調
     const startTime = performance.now();
-    const result = v6System.optimize(parts, materials);
+    const result = v6System.optimize(parts, materials, (progress) => {
+      if (cancelled || currentRequestId !== requestId) return;
+      sendProgress(requestId, progress.percentage);
+      console.log(`[Worker] 進度更新: ${progress.stage} - ${progress.percentage}%`);
+    });
     const endTime = performance.now();
     
     console.log(`[Worker] 優化完成，耗時：${(endTime - startTime).toFixed(2)}ms`);
     console.log(`[Worker] 結果：已排版 ${result.placedParts.length} 個零件`);
-    
-    // 確保有一些延遲讓進度條更新
-    await new Promise(resolve => setTimeout(resolve, 100));
     
     return result;
   } catch (error) {

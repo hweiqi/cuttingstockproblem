@@ -143,15 +143,17 @@ export class OptimizedPlacerV4 {
     
     // 步驟5：處理未能放置的零件
     for (const item of packingResult.unplaced) {
+      const reason = this.getUnplacedReason(item, materials);
+      console.log(`[Placer] 未排版零件: ${item.instance.part.id}#${item.instance.instanceId}, 原因: ${reason}`);
       unplacedParts.push({
         partId: item.instance.part.id,
         instanceId: item.instance.instanceId,
-        reason: this.getUnplacedReason(item, materials)
+        reason: reason
       });
     }
     
-    // 步驟6：如果有大量未排版零件，嘗試更積極的策略
-    if (unplacedParts.length > 50) { // 降低閾值到50
+    // 步驟6：如果有任何未排版零件，嘗試更積極的策略
+    if (unplacedParts.length > 0) { // 改為0，任何未排版零件都會觸發積極策略
       console.log(`[Placer] 發現 ${unplacedParts.length} 個未排版零件，嘗試積極策略`);
       console.log(`[Placer] 當前材料實例數：${materialInstances.length}`);
       
@@ -169,10 +171,12 @@ export class OptimizedPlacerV4 {
       // 更新未排版列表
       unplacedParts.length = 0;
       for (const item of aggressiveResult.stillUnplaced) {
+        const reason = this.getUnplacedReason(item, materials);
+        console.log(`[Placer] 積極策略後仍未排版: ${item.instance.part.id}#${item.instance.instanceId}, 原因: ${reason}`);
         unplacedParts.push({
           partId: item.instance.part.id,
           instanceId: item.instance.instanceId,
-          reason: this.getUnplacedReason(item, materials)
+          reason: reason
         });
       }
     }
@@ -368,17 +372,31 @@ export class OptimizedPlacerV4 {
     
     // 如果創建的實例不足，強制創建更多
     if (newInstances.length < targetCount) {
-      const unlimitedMaterials = originalMaterials.filter(m => !m.quantity || m.quantity === 0);
+      let unlimitedMaterials = originalMaterials.filter(m => !m.quantity || m.quantity === 0);
+      
+      // 如果沒有無限材料，將最大的有限材料視為無限供應
+      if (unlimitedMaterials.length === 0) {
+        const limitedMaterials = originalMaterials.filter(m => m.quantity && m.quantity > 0);
+        if (limitedMaterials.length > 0) {
+          // 選擇最大的有限材料作為備用無限供應
+          const bestLimitedMaterial = [...limitedMaterials].sort((a, b) => (b.length || 0) - (a.length || 0))[0];
+          console.log(`[Placer] 有限材料用完，將材料 ${bestLimitedMaterial.id} 視為無限供應以完成排版`);
+          unlimitedMaterials = [bestLimitedMaterial];
+        }
+      }
+      
       if (unlimitedMaterials.length > 0) {
         // 優先選擇最大的無限供應材料
         const sortedUnlimited = [...unlimitedMaterials].sort((a, b) => (b.length || 0) - (a.length || 0));
         const bestMaterial = sortedUnlimited[0];
         const additionalNeeded = targetCount - newInstances.length;
         
+        console.log(`[Placer] 使用材料 ${bestMaterial.id} 創建額外 ${additionalNeeded} 個實例以完成排版`);
+        
         // 分散創建到不同材料以提高利用率
         let createdCount = 0;
         for (const material of sortedUnlimited) {
-          const createCount = Math.ceil(additionalNeeded * (material.length / bestMaterial.length));
+          const createCount = Math.ceil(additionalNeeded * ((material.length || 0) / (bestMaterial.length || 1)));
           for (let i = 0; i < createCount && createdCount < additionalNeeded; i++) {
             newInstances.push({
               material,
@@ -418,10 +436,12 @@ export class OptimizedPlacerV4 {
     
     console.log(`[Placer] 積極策略：為 ${unplacedItems.length} 個未排版零件創建額外實例`);
     
-    // 創建大量新材料實例（基於未排版零件的數量）
+    // 創建足夠的新材料實例確保所有零件都能排版
+    const avgItemsPerMaterial = 3; // 假設每個材料可以放置3個零件
     const targetInstances = Math.max(
-      Math.ceil(unplacedItems.length / 2), // 至少為未排版零件數的一半
-      500 // 至少創建500個新實例
+      Math.ceil(unplacedItems.length / avgItemsPerMaterial), // 基於實際需求計算
+      unplacedItems.length, // 至少等於未排版零件數
+      100 // 最少創建100個實例
     );
     
     console.log(`[Placer] 目標創建 ${targetInstances} 個新實例`);
@@ -434,17 +454,28 @@ export class OptimizedPlacerV4 {
     
     // 如果創建的實例不足，強制創建更多
     if (newInstances.length < targetInstances) {
-      const bestMaterial = originalMaterials.sort((a, b) => (b.length || 0) - (a.length || 0))[0];
+      // 優先使用無限材料，如果沒有則使用最大的有限材料
+      let availableMaterials = originalMaterials.filter(m => !m.quantity || m.quantity === 0);
+      if (availableMaterials.length === 0) {
+        availableMaterials = originalMaterials.filter(m => m.quantity && m.quantity > 0);
+        if (availableMaterials.length > 0) {
+          console.log(`[Placer] 積極策略：有限材料用完，使用有限材料繼續排版以完成所有零件`);
+        }
+      }
+      
+      const bestMaterial = availableMaterials.sort((a, b) => (b.length || 0) - (a.length || 0))[0];
       const additionalNeeded = targetInstances - newInstances.length;
       
-      console.log(`[Placer] 強制創建額外 ${additionalNeeded} 個實例`);
+      console.log(`[Placer] 強制創建額外 ${additionalNeeded} 個實例使用材料 ${bestMaterial?.id}`);
       
-      for (let i = 0; i < additionalNeeded; i++) {
-        newInstances.push({
-          material: bestMaterial,
-          instanceId: materialInstances.length + newInstances.length,
-          usedLength: 0
-        });
+      if (bestMaterial) {
+        for (let i = 0; i < additionalNeeded; i++) {
+          newInstances.push({
+            material: bestMaterial,
+            instanceId: materialInstances.length + newInstances.length,
+            usedLength: 0
+          });
+        }
       }
     }
     
@@ -659,13 +690,42 @@ export class OptimizedPlacerV4 {
    * 獲取未放置原因
    */
   private getUnplacedReason(item: PackingItem, materials: Material[]): string {
+    const partLength = item.instance.part.length;
+    const requiredLength = item.requiredLength;
     const maxMaterialLength = Math.max(...materials.map(m => m.length || 0));
     
-    if (item.actualLength > maxMaterialLength) {
-      return `零件長度(${item.instance.part.length}mm)超出所有材料長度`;
+    // 原因1：零件長度超出最大材料長度
+    if (partLength > maxMaterialLength) {
+      const largestMaterial = materials.find(m => m.length === maxMaterialLength);
+      return `零件長度(${partLength}mm)超出最大材料長度(${maxMaterialLength}mm, 材料ID: ${largestMaterial?.id})`;
     }
     
-    return `沒有足夠的材料空間（需要至少 ${item.requiredLength}mm）`;
+    // 原因2：加上前端損耗後超出材料長度
+    if (requiredLength > maxMaterialLength) {
+      return `零件加前端損耗後(${requiredLength}mm = ${partLength}mm + ${this.constraints.frontEndLoss}mm)超出最大材料長度(${maxMaterialLength}mm)`;
+    }
+    
+    // 原因3：檢查是否有限制數量的材料已用完
+    const limitedMaterials = materials.filter(m => m.quantity && m.quantity > 0);
+    const unlimitedMaterials = materials.filter(m => !m.quantity || m.quantity === 0);
+    
+    // 注意：現在系統會自動將有限材料轉為無限供應，所以這種情況應該很少發生
+    if (limitedMaterials.length > 0 && unlimitedMaterials.length === 0) {
+      // 只有有限材料，但系統應該已經自動處理了
+      return `有限材料不足，但系統應已自動擴展材料供應（需要${requiredLength}mm）`;
+    }
+    
+    // 原因4：雖有無限材料但未能成功創建足夠實例
+    if (unlimitedMaterials.length > 0) {
+      const suitableMaterials = unlimitedMaterials.filter(m => (m.length || 0) >= requiredLength);
+      if (suitableMaterials.length === 0) {
+        return `無限供應的材料長度都不足（需要${requiredLength}mm，最大無限材料長度：${Math.max(...unlimitedMaterials.map(m => m.length || 0))}mm）`;
+      }
+      return `材料實例創建或分配失敗（可能是批次處理或演算法限制）`;
+    }
+    
+    // 原因5：其他未知原因
+    return `未能找到合適的材料空間（需要${requiredLength}mm，可能因為材料碎片化或演算法限制）`;
   }
   
   /**

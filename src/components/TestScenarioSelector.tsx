@@ -135,15 +135,15 @@ export const TestScenarioSelector: React.FC<TestScenarioSelectorProps> = ({ onAp
         .scenario-dropdown {
           position: absolute;
           top: 100%;
-          left: 0;
+          right: 0;
           margin-top: 5px;
           background: white;
           border: 1px solid #ddd;
           border-radius: 8px;
           box-shadow: 0 2px 10px rgba(0,0,0,0.1);
           width: 350px;
-          z-index: 1000;
-          max-height: 600px;
+          z-index: 9999;
+          max-height: 70vh;
           overflow-y: auto;
         }
 

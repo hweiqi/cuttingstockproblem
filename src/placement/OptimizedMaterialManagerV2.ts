@@ -8,6 +8,7 @@ import { PackingItem } from './interfaces/IPackingStrategy';
 export class OptimizedMaterialManagerV2 {
   private readonly MIN_UTILIZATION_THRESHOLD = 0.6; // 降低利用率閾值以允許更多實例
   private readonly BATCH_SIZE_MULTIPLIER = 1.5; // 增加批次大小乘數
+  private readonly LAST_MATERIAL_MIN_EFFICIENCY = 0.7; // 最後一支母材的最低效率要求
 
   /**
    * 創建材料實例以容納所有項目
@@ -76,21 +77,20 @@ export class OptimizedMaterialManagerV2 {
       }
     }
 
-    // 處理剩餘項目
+    // 處理剩餘項目 - 使用智能選擇
     if (remainingItems.length > 0) {
-      const unlimitedMaterials = sortedMaterials.filter(m => !m.quantity || m.quantity === 0);
-      if (unlimitedMaterials.length > 0) {
-        const bestMaterial = unlimitedMaterials[0];
-        const additionalCount = this.estimateRequiredInstancesForItems(bestMaterial, remainingItems);
-        const currentCount = instances.filter(inst => inst.material.id === bestMaterial.id).length;
-        
-        for (let i = 0; i < additionalCount; i++) {
-          instances.push({
-            material: bestMaterial,
-            instanceId: currentCount + i,
-            usedLength: 0
-          });
-        }
+      console.log(`[MaterialManager V2] 處理剩餘 ${remainingItems.length} 個項目，使用智能材料選擇`);
+      const bestMaterial = this.selectBestMaterialForRemainingItems(sortedMaterials, remainingItems);
+      
+      const additionalCount = this.estimateRequiredInstancesForItems(bestMaterial, remainingItems);
+      const currentCount = instances.filter(inst => inst.material.id === bestMaterial.id).length;
+      
+      for (let i = 0; i < additionalCount; i++) {
+        instances.push({
+          material: bestMaterial,
+          instanceId: currentCount + i,
+          usedLength: 0
+        });
       }
     }
 
@@ -370,5 +370,63 @@ export class OptimizedMaterialManagerV2 {
       // 但如果項目長度超過材料長度的 60%，則使用當前材料
       return !hasSmallerFit || (item.actualLength / materialLength > 0.6);
     });
+  }
+
+  /**
+   * 智能選擇最適合剩餘項目的材料
+   * 優先考慮效率而非最長材料
+   */
+  private selectBestMaterialForRemainingItems(
+    materials: Material[],
+    remainingItems: PackingItem[]
+  ): Material {
+    // 計算剩餘項目的總長度
+    const totalRemainingLength = remainingItems.reduce((sum, item) => sum + item.actualLength, 0);
+    
+    // 估算每種材料的效率
+    let bestMaterial = materials[0]; // 預設使用最長材料
+    let bestEfficiency = 0;
+    
+    for (const material of materials) {
+      // 估算這種材料能容納的項目數
+      const estimatedItemsPerMaterial = this.estimateItemsPerInstance(material, remainingItems);
+      
+      // 如果無法容納任何項目，跳過
+      if (estimatedItemsPerMaterial === 0) continue;
+      
+      // 計算需要的材料數
+      const requiredMaterials = Math.ceil(remainingItems.length / estimatedItemsPerMaterial);
+      
+      // 計算總材料長度
+      const totalMaterialLength = material.length * requiredMaterials;
+      
+      // 計算效率（考慮材料利用率和數量）
+      const efficiency = totalRemainingLength / totalMaterialLength;
+      
+      console.log(`[MaterialManager V2] 材料 ${material.id} (${material.length}mm): 效率 ${(efficiency * 100).toFixed(2)}%`);
+      
+      // 如果效率更高且滿足最低效率要求，選擇此材料
+      if (efficiency > bestEfficiency && efficiency >= this.LAST_MATERIAL_MIN_EFFICIENCY) {
+        bestMaterial = material;
+        bestEfficiency = efficiency;
+      }
+    }
+    
+    // 如果所有材料效率都低於閾值，選擇效率最高的短材料
+    if (bestEfficiency < this.LAST_MATERIAL_MIN_EFFICIENCY) {
+      console.log(`[MaterialManager V2] 所有材料效率都低於 ${this.LAST_MATERIAL_MIN_EFFICIENCY * 100}%，選擇最短材料以減少浪費`);
+      
+      // 從短到長排序，找第一個能容納至少一個項目的材料
+      const shortToLongMaterials = [...materials].sort((a, b) => (a.length || 0) - (b.length || 0));
+      for (const material of shortToLongMaterials) {
+        if (this.estimateItemsPerInstance(material, remainingItems) > 0) {
+          bestMaterial = material;
+          break;
+        }
+      }
+    }
+    
+    console.log(`[MaterialManager V2] 選擇材料 ${bestMaterial.id} (${bestMaterial.length}mm) 處理剩餘項目`);
+    return bestMaterial;
   }
 }

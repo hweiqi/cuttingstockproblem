@@ -40,11 +40,9 @@ describe('PartService - Clear All Functionality', () => {
       const part2 = service.addPart(1000, 1);
       const id2 = part2.id;
       
-      // IDs should be different (because of timestamp)
-      expect(id1).not.toBe(id2);
-      
-      // But the counter part should reset (check if ID starts with part-1)
-      expect(id2).toMatch(/^part-1-/);
+      // ID counter should reset, so both should be P1
+      expect(id1).toBe('P1');
+      expect(id2).toBe('P1');
     });
 
     it('should allow adding same parts after clearing', () => {

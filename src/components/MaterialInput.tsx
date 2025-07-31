@@ -87,10 +87,33 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
       </div>
       
       <style jsx>{`
+        .material-input {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          background: white;
+          border-radius: 8px;
+          padding: 15px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .material-input h2 {
+          margin: 0 0 10px 0;
+          font-size: 1.2rem;
+          color: #333;
+        }
+        
+        .material-input h3 {
+          margin: 15px 0 10px 0;
+          font-size: 1rem;
+          color: #555;
+        }
+        
         .input-section {
           display: flex;
           flex-direction: column;
-          gap: 15px;
+          gap: 10px;
+          margin-bottom: 15px;
         }
         
         .input-group {
@@ -98,31 +121,39 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
           flex-direction: column;
         }
         
+        .material-list {
+          flex: 1;
+          overflow-y: auto;
+          min-height: 0;
+        }
         
-        .input-sm {
-          max-width: 200px;
+        .material-list ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
         }
         
         .material-item {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 12px;
+          padding: 10px;
           border: 1px solid #ddd;
-          border-radius: 6px;
+          border-radius: 4px;
           background-color: #f9f9f9;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
         
         .material-info {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 2px;
         }
         
         .material-length {
           font-weight: 500;
           color: #333;
+          font-size: 14px;
         }
         
         .material-quantity {
@@ -140,13 +171,13 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
         }
         
         .btn-primary {
-          background-color: #007bff;
+          background-color: #4CAF50;
           color: white;
-          align-self: flex-start;
+          width: 100%;
         }
         
         .btn-primary:hover {
-          background-color: #0056b3;
+          background-color: #45a049;
         }
         
         .btn-danger {
@@ -164,7 +195,7 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
         }
         
         .input {
-          padding: 10px;
+          padding: 8px;
           border: 1px solid #ddd;
           border-radius: 4px;
           font-size: 14px;
@@ -172,15 +203,15 @@ export const MaterialInput: React.FC<MaterialInputProps> = ({
         
         .input:focus {
           outline: none;
-          border-color: #007bff;
-          box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+          border-color: #4CAF50;
+          box-shadow: 0 0 0 2px rgba(76,175,80,0.25);
         }
         
         .error {
           color: #dc3545;
-          font-size: 14px;
+          font-size: 12px;
           margin-top: 5px;
-          padding: 8px;
+          padding: 6px;
           background-color: #f8d7da;
           border: 1px solid #f5c6cb;
           border-radius: 4px;

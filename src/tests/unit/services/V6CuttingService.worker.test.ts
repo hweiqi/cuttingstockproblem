@@ -28,6 +28,7 @@ describe('V6CuttingService Web Worker 結果轉換測試', () => {
         placedParts: [
           {
             partId: 'P1',
+            partInstanceId: 0,
             materialId: 'M1',
             materialInstanceId: 0,
             position: 10,
@@ -35,6 +36,7 @@ describe('V6CuttingService Web Worker 結果轉換測試', () => {
           },
           {
             partId: 'P1',
+            partInstanceId: 1,
             materialId: 'M1',
             materialInstanceId: 0,
             position: 2013,
@@ -161,7 +163,7 @@ describe('V6CuttingService Web Worker 結果轉換測試', () => {
       // 驗證未排版零件
       expect(result.unplacedParts).toBeDefined();
       expect(result.unplacedParts.length).toBe(1);
-      expect(result.unplacedParts[0].id).toBe('P2');
+      expect(result.unplacedParts[0].partId).toBe('P2');
     });
 
     it('應該正確處理完全無法排版的情況', () => {
@@ -210,7 +212,7 @@ describe('V6CuttingService Web Worker 結果轉換測試', () => {
 
       // 驗證未排版零件
       expect(result.unplacedParts.length).toBe(1);
-      expect(result.unplacedParts[0].id).toBe('P1');
+      expect(result.unplacedParts[0].partId).toBe('P1');
 
       // 驗證效率為0
       expect(result.overallEfficiency).toBe(0);
